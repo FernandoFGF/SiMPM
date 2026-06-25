@@ -1,0 +1,10 @@
+model_a: S13360-3050 (CS/PE)
+model_b: S13360-3075 (CS/PE)
+optical:
+  led_type: Red (630nm)
+  config_type: LED
+  distance_cm: 10.0
+  pulse_voltage: 5.0
+  pulse_width_ns: 50.0
+  resistance_ohm: 100.0
+  monochromator_wl_nm: 450.0

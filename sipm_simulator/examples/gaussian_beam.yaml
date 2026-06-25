@@ -1,0 +1,34 @@
+sipm:
+  nx: 16
+  ny: 16
+  pitch: 50.0
+  fill_factor: 0.64
+  pde: 0.40
+  gain: 1000000.0
+  recovery_time: 50.0e-9
+  crosstalk_prob: 0.1
+
+source:
+  type: gaussian
+  x_center: 380.0
+  y_center: 420.0
+  sigma: 80.0
+  n_photons: 5000
+
+simulation:
+  dcr: 100000.0
+  afterpulse_prob: 0.05
+  seed: 42
+
+pulse:
+  tau_rise: 1.5e-9
+  tau_fall: 8.0e-9
+  duration_ns: 100.0
+  ap_fraction: 0.1
+  ap_delay: 50.0e-9
+
+array:
+  enabled: false
+  rows: 2
+  cols: 2
+  gap: 100.0
