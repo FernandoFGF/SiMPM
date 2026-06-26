@@ -1231,7 +1231,7 @@ class CurveEditorDialog(ctk.CTkToplevel):
                       command=self._save).pack(side="right", padx=4)
         self._spec_fig = Figure(figsize=(8, 4.5), dpi=100)
         self._spec_canvas = FigureCanvasTkAgg(self._spec_fig, tab)
-        self._spec_canvas.get_tk_widget().pack(fill="both", expand=True,
+        self._spec_canvas.get_tk_widget().grid(row=1, column=0, sticky="nsew",
                                                 padx=4, pady=4)
         self._spec_ax = self._spec_fig.add_subplot(111)
         self._draw_spectral()
