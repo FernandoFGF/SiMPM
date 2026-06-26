@@ -852,10 +852,10 @@ class App(ctk.CTk):
             ax_pde.plot(c["vov"], c["pde"], color=colors[pitch],
                         linewidth=1.5, marker='o', markersize=3,
                         label=f"{pitch}\u00b5m ({max(c['pde']):.0f}%)")
-            ax_gain.plot(c["vov"], np.array(c["gain"]) / 1e6,
-                         color=colors[pitch], linewidth=1.5,
-                         marker='o', markersize=3,
-                         label=f"{pitch}\u00b5m ({max(c['gain'])/1e6:.1f}M)")
+            ax_gain.plot(c["vov"], c["gain"], color=colors[pitch],
+                         linewidth=1.5, marker='o', markersize=3,
+                         label=f"{pitch}\u00b5m "
+                               f"({max(c['gain'])/1e6:.1f}M)")
             ax_xt.plot(c["vov"], c["xtalk"], color=colors[pitch],
                        linewidth=1.5, marker='o', markersize=3,
                        label=f"{pitch}\u00b5m ({max(c['xtalk']):.0f}%)")
@@ -870,11 +870,12 @@ class App(ctk.CTk):
         ax_pde.grid(True, alpha=0.3)
         ax_pde.grid(True, which='minor', alpha=0.1)
         ax_gain.set_xlabel("Overvoltage (V)")
-        ax_gain.set_ylabel("Gain (\u00d710\u2076)")
-        ax_gain.set_title("Gain vs Vov (log scale)")
+        ax_gain.set_ylabel("Gain")
+        ax_gain.set_title("Gain vs Vov")
         ax_gain.set_xlim(0, 10)
-        ax_gain.set_yscale("log")
-        ax_gain.set_ylim(0.05, 20)
+        ax_gain.set_ylim(0, 1.8e7)
+        ax_gain.ticklabel_format(axis='y', style='scientific',
+                                  scilimits=(0, 0))
         ax_gain.legend(fontsize=7, loc='upper left')
         ax_gain.grid(True, alpha=0.3)
         ax_gain.grid(True, which='minor', alpha=0.1)
@@ -882,7 +883,7 @@ class App(ctk.CTk):
         ax_xt.set_ylabel("Crosstalk (%)")
         ax_xt.set_title("Crosstalk vs Vov")
         ax_xt.set_xlim(0, 10)
-        ax_xt.set_ylim(0, 50)
+        ax_xt.set_ylim(0, 25)
         ax_xt.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
         ax_xt.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
         ax_xt.legend(fontsize=7, loc='upper left')
@@ -1318,18 +1319,18 @@ class CurveEditorDialog(ctk.CTkToplevel):
             ("PDE vs Vov", "pde", "pde", "PDE (%)", 1,
              (10, 70), (10, 5)),
             ("Crosstalk vs Vov", "xtalk", "xtalk", "Crosstalk (%)", 1,
-             (0, 50), (10, 5)),
+             (0, 25), (10, 5)),
         ]:
             self._build_single_ov_tab(tab_name, tab_id, data_key,
                                       ylabel, divider, ylims, yticks,
                                       all_pitches=True)
-        gain_info = [(25, 1.6e6, 1e5), (50, 6e6, 1e5), (75, 1.6e7, 1e5)]
+        gain_info = [(25, 1.6e6, 0), (50, 6e6, 0), (75, 1.6e7, 0)]
         for pitch, ymax, ymin in gain_info:
             self._build_single_ov_tab(
                 f"Gain {pitch}\u00b5m", f"gain{pitch}", "gain",
                 f"Gain {pitch}\u00b5m", 1,
-                (ymin, ymax * 1.2), None,
-                single_pitch=pitch, use_log=True)
+                (ymin, ymax * 1.05), None,
+                single_pitch=pitch)
 
     def _build_single_ov_tab(self, tab_name, tab_id, data_key,
                              ylabel, divider, ylims, yticks,
