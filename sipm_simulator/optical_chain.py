@@ -41,8 +41,12 @@ FIBER_TRANSMISSION = 0.90
 FIBER_NA = 0.22
 FIBER_CORE_UM = 200.0
 MONOCHROMATOR_EFFICIENCY = 0.35
-MONOCHROMATOR_FWHM_NM = 2.0
-MONOCHROMATOR_BEAM_DIV_MRAD = 5.0
+def _spectral_overlap(led_wl_nm, led_fwhm_nm, mono_wl_nm, mono_fwhm_nm):
+    d = led_wl_nm - mono_wl_nm
+    sigma_sum_sq = led_fwhm_nm**2 + mono_fwhm_nm**2
+    if sigma_sum_sq <= 0:
+        return 1.0
+    return np.exp(-4.0 * np.log(2.0) * d**2 / sigma_sum_sq)
 MONO_COUPLING = 0.15
 
 
@@ -185,17 +189,25 @@ def calculate_photons(config: OpticalConfig,
             distance_m, sensor_w_m, sensor_h_m)
 
     elif path == "Monochromator":
+        overlap = _spectral_overlap(
+            led["wavelength_nm"], led["fwhm_nm"],
+            config.monochromator_wl_nm, MONOCHROMATOR_FWHM_NM)
         photons_entering = photons_emitted * (MONO_COUPLING
-                                               * MONOCHROMATOR_EFFICIENCY)
+                                               * MONOCHROMATOR_EFFICIENCY
+                                               * overlap)
         wl_out = config.monochromator_wl_nm
         fwhm_out = MONOCHROMATOR_FWHM_NM
         geo_fraction = _mono_collection_fraction(
             distance_m, sensor_w_m, sensor_h_m)
 
     elif path == "Fiber + Monochromator":
+        overlap = _spectral_overlap(
+            led["wavelength_nm"], led["fwhm_nm"],
+            config.monochromator_wl_nm, MONOCHROMATOR_FWHM_NM)
         photons_entering = photons_emitted * (FIBER_COUPLING
                                                * FIBER_TRANSMISSION
-                                               * MONOCHROMATOR_EFFICIENCY)
+                                               * MONOCHROMATOR_EFFICIENCY
+                                               * overlap)
         wl_out = config.monochromator_wl_nm
         fwhm_out = MONOCHROMATOR_FWHM_NM
         geo_fraction = _mono_collection_fraction(
