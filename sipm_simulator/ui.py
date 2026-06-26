@@ -874,7 +874,7 @@ class App(ctk.CTk):
         ax_gain.set_title("Gain vs Vov (log scale)")
         ax_gain.set_xlim(0, 10)
         ax_gain.set_yscale("log")
-        ax_gain.set_ylim(5e4, 2e7)
+        ax_gain.set_ylim(0.05, 20)
         ax_gain.legend(fontsize=7, loc='upper left')
         ax_gain.grid(True, alpha=0.3)
         ax_gain.grid(True, which='minor', alpha=0.1)
