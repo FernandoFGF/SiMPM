@@ -81,9 +81,9 @@ def plot_hits(sipm, ax=None, fired_only=False):
                 active_color = '#ce93d8'
                 alpha = 0.95
             elif cell.crosstalk_fired:
-                face_color = '#c8e6c9'
-                edge_color = '#2e7d32'
-                active_color = '#66bb6a'
+                face_color = '#424242'
+                edge_color = '#212121'
+                active_color = '#616161'
                 alpha = 0.95
             elif cell.dark_fired:
                 face_color = '#ffe0b2'
@@ -132,7 +132,7 @@ def plot_hits(sipm, ax=None, fired_only=False):
                        alpha=0.7, label='Not fired'),
         mpatches.Patch(facecolor='#ef5350', edgecolor='#c62828',
                        alpha=0.95, label='Photon'),
-        mpatches.Patch(facecolor='#66bb6a', edgecolor='#2e7d32',
+        mpatches.Patch(facecolor='#616161', edgecolor='#212121',
                        alpha=0.95, label='Crosstalk'),
         mpatches.Patch(facecolor='#ffb74d', edgecolor='#ef6c00',
                        alpha=0.95, label='Dark count'),
