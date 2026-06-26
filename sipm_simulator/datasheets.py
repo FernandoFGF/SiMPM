@@ -87,7 +87,7 @@ def _build_catalog():
               pde=0.35, gain=7.0e5, breakdown_v=53.0,
               dcr_typ_kcps=70, dcr_max_kcps=210, capacitance_pf=60,
               crosstalk_pct=1.0, vop="VBR+5V", vov_v=5.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=5.0, recovery_ns=15.0,
               packages=["CS", "PE"])
 
@@ -95,7 +95,7 @@ def _build_catalog():
               pde=0.35, gain=7.0e5, breakdown_v=53.0,
               dcr_typ_kcps=400, dcr_max_kcps=1200, capacitance_pf=320,
               crosstalk_pct=1.0, vop="VBR+5V", vov_v=5.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=5.0, recovery_ns=15.0,
               packages=["CS", "PE"])
 
@@ -103,7 +103,7 @@ def _build_catalog():
               pde=0.35, gain=7.0e5, breakdown_v=53.0,
               dcr_typ_kcps=1600, dcr_max_kcps=5000, capacitance_pf=1280,
               crosstalk_pct=1.0, vop="VBR+5V", vov_v=5.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=5.0, recovery_ns=15.0,
               packages=["CS", "PE"])
 
@@ -112,7 +112,7 @@ def _build_catalog():
               pde=0.40, gain=1.7e6, breakdown_v=53.0,
               dcr_typ_kcps=90, dcr_max_kcps=270, capacitance_pf=60,
               crosstalk_pct=5.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=10.0, recovery_ns=20.0,
               packages=["CS", "PE"])
 
@@ -120,7 +120,7 @@ def _build_catalog():
               pde=0.40, gain=1.7e6, breakdown_v=53.0,
               dcr_typ_kcps=500, dcr_max_kcps=1500, capacitance_pf=320,
               crosstalk_pct=5.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=10.0, recovery_ns=20.0,
               packages=["CS", "PE"])
 
@@ -128,7 +128,7 @@ def _build_catalog():
               pde=0.40, gain=1.7e6, breakdown_v=53.0,
               dcr_typ_kcps=2000, dcr_max_kcps=6000, capacitance_pf=1280,
               crosstalk_pct=5.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=10.0, recovery_ns=20.0,
               packages=["CS", "PE"])
 
@@ -137,7 +137,7 @@ def _build_catalog():
               pde=0.50, gain=4.0e6, breakdown_v=53.0,
               dcr_typ_kcps=90, dcr_max_kcps=270, capacitance_pf=60,
               crosstalk_pct=7.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=15.0, recovery_ns=30.0,
               packages=["CS", "PE"])
 
@@ -145,7 +145,7 @@ def _build_catalog():
               pde=0.50, gain=4.0e6, breakdown_v=53.0,
               dcr_typ_kcps=500, dcr_max_kcps=1500, capacitance_pf=320,
               crosstalk_pct=7.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=15.0, recovery_ns=30.0,
               packages=["CS", "PE"])
 
@@ -153,7 +153,7 @@ def _build_catalog():
               pde=0.50, gain=4.0e6, breakdown_v=53.0,
               dcr_typ_kcps=2000, dcr_max_kcps=6000, capacitance_pf=1280,
               crosstalk_pct=7.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
-              spectral_min_nm=270, spectral_max_nm=900,
+              spectral_min_nm=200, spectral_max_nm=950,
               pulse_fall_ns=15.0, recovery_ns=30.0,
               packages=["CS", "PE"])
 
@@ -293,42 +293,72 @@ def parse_hamamatsu_datasheet(filepath: str) -> list[dict]:
 
 OV_CURVES = {
     25: {
-        "vov":   [0, 1, 2, 3, 4, 5, 6, 7],
-        "pde":   [0, 5, 15, 23, 29, 35, 37, 40],
-        "gain":  [0, 0.8e5, 2.8e5, 4.5e5, 5.8e5, 7.0e5, 8.2e5, 9.5e5],
-        "xtalk": [0, 0.1, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0],
-        "dcr":   [0, 0.15, 0.35, 0.55, 0.75, 1.0, 1.4, 2.0],
+        "vov":   [2, 3, 4, 5, 6, 7, 8],
+        "pde":   [15, 23, 29, 35, 37, 40, 42],
+        "gain":  [2.8e5, 4.5e5, 5.8e5, 7.0e5, 8.2e5, 9.5e5, 10e5],
+        "xtalk": [0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 2.5],
+        "dcr":   [0.35, 0.55, 0.75, 1.0, 1.4, 2.0, 2.5],
     },
     50: {
-        "vov":   [0, 1, 2, 3, 4, 5, 6],
-        "pde":   [0, 17, 28, 40, 45, 50, 52],
-        "gain":  [0, 0.6e6, 1.15e6, 1.7e6, 2.3e6, 2.8e6, 3.2e6],
-        "xtalk": [0, 1.0, 3.0, 5.0, 10.0, 15.0, 22.0],
-        "dcr":   [0, 0.3, 0.6, 1.0, 1.6, 2.5, 4.0],
+        "vov":   [2, 3, 4, 5, 6, 7, 8],
+        "pde":   [28, 40, 45, 50, 52, 54, 55],
+        "gain":  [1.15e6, 1.7e6, 2.3e6, 2.8e6, 3.2e6, 3.5e6, 3.7e6],
+        "xtalk": [3.0, 5.0, 10.0, 15.0, 22.0, 28.0, 35.0],
+        "dcr":   [0.6, 1.0, 1.6, 2.5, 4.0, 5.5, 7.0],
     },
     75: {
-        "vov":   [0, 1, 2, 3, 4, 5, 6],
-        "pde":   [0, 22, 35, 50, 55, 62, 65],
-        "gain":  [0, 1.5e6, 2.8e6, 4.0e6, 5.2e6, 6.5e6, 7.5e6],
-        "xtalk": [0, 2.0, 5.0, 7.0, 14.0, 22.0, 30.0],
-        "dcr":   [0, 0.3, 0.6, 1.0, 1.6, 2.5, 4.0],
+        "vov":   [2, 3, 4, 5, 6, 7, 8],
+        "pde":   [35, 50, 55, 62, 65, 68, 70],
+        "gain":  [2.8e6, 4.0e6, 5.2e6, 6.5e6, 7.5e6, 8.5e6, 9.0e6],
+        "xtalk": [5.0, 7.0, 14.0, 22.0, 30.0, 38.0, 45.0],
+        "dcr":   [0.6, 1.0, 1.6, 2.5, 4.0, 5.5, 7.0],
     },
 }
 
 SPECTRAL_RESPONSE = {
-    "wl":   [270, 300, 350, 400, 420, 450, 470, 500, 550, 600,
-             650, 700, 750, 800, 850, 900],
-    "pde25": [0.85, 0.95, 0.96, 0.98, 1.0, 1.0, 0.98, 0.93,
-               0.82, 0.65, 0.48, 0.32, 0.18, 0.09, 0.04, 0.01],
-    "pde50": [0.85, 0.94, 0.97, 1.0, 1.0, 1.0, 0.95, 0.90,
-               0.75, 0.55, 0.38, 0.20, 0.09, 0.03, 0.01, 0.0],
-    "pde75": [0.85, 0.93, 0.98, 1.0, 0.98, 1.0, 0.92, 0.88,
-               0.72, 0.52, 0.33, 0.17, 0.07, 0.02, 0.01, 0.0],
+    "wl":   [200, 250, 300, 350, 400, 450, 500, 550, 600, 650,
+             700, 750, 800, 850, 900, 950],
+    "pde25": [0.0, 0.61, 0.95, 0.96, 0.98, 1.0, 0.93, 0.82, 0.65,
+               0.48, 0.32, 0.18, 0.09, 0.04, 0.01, 0.0],
+    "pde50": [0.0, 0.59, 0.94, 0.97, 1.0, 1.0, 0.90, 0.75, 0.55,
+               0.38, 0.20, 0.09, 0.03, 0.01, 0.0, 0.0],
+    "pde75": [0.0, 0.59, 0.93, 0.98, 1.0, 1.0, 0.88, 0.72, 0.52,
+               0.33, 0.17, 0.07, 0.02, 0.01, 0.0, 0.0],
 }
 
 
+CURVES_FILE = DATASHEETS_DIR / ".user_curves.json"
+
+
+def _load_user_curves():
+    global SPECTRAL_RESPONSE, OV_CURVES
+    if not CURVES_FILE.exists():
+        return
+    try:
+        with open(CURVES_FILE, "r") as f:
+            data = json.load(f)
+        if "spectral" in data:
+            SPECTRAL_RESPONSE = data["spectral"]
+        if "ov" in data:
+            OV_CURVES = {int(k): v for k, v in data["ov"].items()}
+    except Exception:
+        pass
+
+
+def save_user_curves(spectral: dict, ov: dict):
+    data = {"spectral": spectral, "ov": {str(k): v for k, v in ov.items()}}
+    with open(CURVES_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+    global SPECTRAL_RESPONSE, OV_CURVES
+    SPECTRAL_RESPONSE = spectral
+    OV_CURVES = {int(k): v for k, v in ov.items()}
+
+
+_load_user_curves()
+
+
 def _interp(x, xp, fp):
-    return float(np.interp(x, xp, fp))
+    return float(np.interp(x, xp, fp, left=0.0, right=float(fp[-1])))
 
 
 def apply_overvoltage(model_data: dict, vov: float) -> dict:
@@ -355,11 +385,30 @@ def apply_overvoltage(model_data: dict, vov: float) -> dict:
 
 
 def apply_wavelength(model_data: dict, wavelength_nm: float) -> float:
+    wl_min = SPECTRAL_RESPONSE["wl"][0]
+    wl_max = SPECTRAL_RESPONSE["wl"][-1]
+    if wavelength_nm < wl_min or wavelength_nm > wl_max:
+        return 0.0
     pitch = model_data["pitch"]
     key = {25: "pde25", 50: "pde50", 75: "pde75"}.get(int(pitch), "pde50")
     factor = _interp(wavelength_nm, SPECTRAL_RESPONSE["wl"],
                       SPECTRAL_RESPONSE[key])
     return model_data["pde"] * max(factor, 0.0)
+
+
+def apply_temperature(model_data: dict, temperature_c: float,
+                      vov_nominal: float) -> dict:
+    temp_ref = 25.0
+    dtemp = temperature_c - temp_ref
+    delta_vbr = model_data["temp_coeff_mv"] * dtemp / 1000.0
+    vov_effective = vov_nominal - delta_vbr
+
+    return {
+        "temperature_c": temperature_c,
+        "delta_vbr": delta_vbr,
+        "vov_effective": max(vov_effective, 0.1),
+        "vov_nominal": vov_nominal,
+    }
 
 
 import numpy as np

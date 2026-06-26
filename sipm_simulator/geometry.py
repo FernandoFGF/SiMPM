@@ -46,7 +46,8 @@ class SiPMGeometry:
     __slots__ = ('nx', 'ny', 'pitch', 'fill_factor', 'width', 'height',
                  'active_size', 'half_active', 'cells',
                  '_fired', '_dark_fired', '_afterpulse_fired',
-                 '_photons_received', '_x_centers', '_y_centers')
+                 '_crosstalk_fired', '_photons_received',
+                 '_x_centers', '_y_centers')
 
     def __init__(self, nx: int = 16, ny: int = 16, pitch: float = 50.0,
                  fill_factor: float = 0.64):
@@ -62,6 +63,7 @@ class SiPMGeometry:
         self._fired = np.zeros((ny, nx), dtype=bool)
         self._dark_fired = np.zeros((ny, nx), dtype=bool)
         self._afterpulse_fired = np.zeros((ny, nx), dtype=bool)
+        self._crosstalk_fired = np.zeros((ny, nx), dtype=bool)
         self._photons_received = np.zeros((ny, nx), dtype=np.int32)
 
         col_grid, row_grid = np.meshgrid(
@@ -113,6 +115,7 @@ class SiPMGeometry:
         self._fired.fill(False)
         self._dark_fired.fill(False)
         self._afterpulse_fired.fill(False)
+        self._crosstalk_fired.fill(False)
         self._photons_received.fill(0)
 
     def fired_mask(self) -> np.ndarray:
@@ -201,6 +204,14 @@ class _CellRef:
     @afterpulse_fired.setter
     def afterpulse_fired(self, value: bool):
         self._sipm._afterpulse_fired[self._row, self._col] = value
+
+    @property
+    def crosstalk_fired(self) -> bool:
+        return bool(self._sipm._crosstalk_fired[self._row, self._col])
+
+    @crosstalk_fired.setter
+    def crosstalk_fired(self, value: bool):
+        self._sipm._crosstalk_fired[self._row, self._col] = value
 
     @property
     def photons_received(self) -> int:

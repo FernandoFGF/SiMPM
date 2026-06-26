@@ -92,6 +92,21 @@ def _led_direct_fraction(distance_m: float, sensor_w_m: float,
     return area / (np.pi * distance_m ** 2)
 
 
+def _compute_beam_sigma_um(config_type: str, distance_m: float) -> float:
+    if config_type == "LED":
+        return 1e6
+    elif config_type in ("Fiber",):
+        na_angle = np.arcsin(FIBER_NA)
+        core_radius_m = FIBER_CORE_UM * 1e-6 / 2
+        spot_radius = core_radius_m + distance_m * np.tan(na_angle)
+        return max(spot_radius * 1e6 / 2.0, 1.0)
+    elif config_type in ("Monochromator", "Fiber + Monochromator"):
+        beam_div_rad = MONOCHROMATOR_BEAM_DIV_MRAD * 1e-3
+        spot_radius = distance_m * np.tan(beam_div_rad / 2)
+        return max(spot_radius * 1e6 / 2.0, 1.0)
+    return 1e6
+
+
 def _fiber_collection_fraction(distance_m: float, sensor_w_m: float,
                                 sensor_h_m: float) -> float:
     na_angle = np.arcsin(FIBER_NA)
@@ -196,6 +211,8 @@ def calculate_photons(config: OpticalConfig,
         att_factor = 10 ** (-config.attenuation_db / 10)
         photons_at_sensor = int(round(photons_at_sensor * att_factor))
 
+    beam_sigma_um = _compute_beam_sigma_um(config.config_type, distance_m)
+
     return {
         "photons": max(photons_at_sensor, 0),
         "wavelength_nm": wl_out,
@@ -210,4 +227,5 @@ def calculate_photons(config: OpticalConfig,
         "pulse_width_ns": config.pulse_width_ns,
         "pulse_voltage": config.pulse_voltage,
         "distance_cm": config.distance_cm,
+        "beam_sigma_um": beam_sigma_um,
     }

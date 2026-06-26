@@ -15,6 +15,7 @@ class SimulationResult:
         self.crosstalk_fires: int = 0
         self.afterpulse_fires: int = 0
         self.fired_cell_coords: list[tuple[int, int]] = []
+        self.total_firings: int = 0
 
     @property
     def occupancy(self) -> float:
@@ -27,6 +28,20 @@ class SimulationResult:
         if self.photons_generated == 0:
             return 0.0
         return self.photons_detected / self.photons_generated
+
+    @property
+    def snr(self) -> float:
+        signal = self.fired_cells
+        noise = self.dark_counts + self.crosstalk_fires + self.afterpulse_fires
+        if noise == 0:
+            return signal
+        return signal / np.sqrt(signal + noise)
+
+    @property
+    def dynamic_range(self) -> float:
+        if self.total_cells == 0:
+            return 0.0
+        return self.total_cells / max(self.photons_detected, 1)
 
     def summary(self) -> str:
         return (
@@ -41,6 +56,7 @@ class SimulationResult:
             f"  dark_counts       = {self.dark_counts}\n"
             f"  crosstalk_fires   = {self.crosstalk_fires}\n"
             f"  afterpulse_fires  = {self.afterpulse_fires}\n"
+            f"  snr               = {self.snr:.2f}\n"
             f")"
         )
 
@@ -117,6 +133,92 @@ class SiPMSimulator:
             result.photons_detected += 1
             result.fired_cell_coords.append((r, c))
 
+        result.total_firings = result.photons_detected
+
+        missed = n_photons - result.photons_detected - result.photons_blocked
+        result.photons_missed = missed
+
+        result.fired_cells = self.sipm.fired_cells
+
+        if self.crosstalk_prob > 0:
+            self._apply_crosstalk(result)
+        if self.afterpulse_prob > 0:
+            self._generate_afterpulses(result)
+
+        result.fired_cells = self.sipm.fired_cells
+        return result
+
+    def run_temporal(self, source, n_photons: int,
+                     pulse_width_ns: float = 50.0,
+                     recovery_time_ns: float = 20.0
+                     ) -> SimulationResult:
+        result = SimulationResult()
+        result.total_cells = self.sipm.total_cells
+        result.photons_generated = n_photons
+
+        self.sipm.reset()
+
+        if self.dcr > 0:
+            self._inject_dark_counts(result)
+
+        photons = source.generate(n_photons, sipm=self.sipm, rng=self.rng)
+        xs = np.array([p.x for p in photons])
+        ys = np.array([p.y for p in photons])
+
+        arrival_times = self._rng.uniform(0, pulse_width_ns, n_photons)
+        sorted_indices = np.argsort(arrival_times)
+        xs = xs[sorted_indices]
+        ys = ys[sorted_indices]
+        arrival_times = arrival_times[sorted_indices]
+
+        in_bounds = (xs >= 0) & (xs < self.sipm.width) & (ys >= 0) & (ys < self.sipm.height)
+        cols = np.floor(xs / self.sipm.pitch).astype(int)
+        rows = np.floor(ys / self.sipm.pitch).astype(int)
+        cols = np.clip(cols, 0, self.sipm.nx - 1)
+        rows = np.clip(rows, 0, self.sipm.ny - 1)
+
+        half = self.sipm.half_active
+        xc = self.sipm._x_centers
+        yc = self.sipm._y_centers
+        in_active = np.zeros(n_photons, dtype=bool)
+        valid = np.where(in_bounds)[0]
+        in_active[valid] = (
+            (np.abs(xs[valid] - xc[rows[valid], cols[valid]]) <= half)
+            & (np.abs(ys[valid] - yc[rows[valid], cols[valid]]) <= half)
+        )
+
+        in_active_only = in_active & in_bounds
+        r_vals = self._rng.random(n_photons)
+        detected_mask = in_active_only & (r_vals < self.pde)
+
+        cell_recovery_until = np.zeros((self.sipm.ny, self.sipm.nx),
+                                        dtype=np.float64)
+        cell_fire_count = np.zeros((self.sipm.ny, self.sipm.nx), dtype=np.int32)
+        primary_firings = 0
+
+        for i in np.where(in_active_only)[0]:
+            r, c = rows[i], cols[i]
+            self.sipm._photons_received[r, c] += 1
+
+        det_order = np.where(detected_mask)[0]
+        for i in det_order:
+            r, c = rows[i], cols[i]
+            t_arrival = arrival_times[i]
+
+            if self.sipm._fired[r, c]:
+                if t_arrival < cell_recovery_until[r, c]:
+                    result.photons_blocked += 1
+                    continue
+
+            self.sipm._fired[r, c] = True
+            cell_recovery_until[r, c] = t_arrival + recovery_time_ns
+            cell_fire_count[r, c] += 1
+            result.photons_detected += 1
+            primary_firings += 1
+            result.fired_cell_coords.append((r, c))
+
+        result.total_firings = primary_firings
+
         missed = n_photons - result.photons_detected - result.photons_blocked
         result.photons_missed = missed
 
@@ -158,6 +260,7 @@ class SiPMSimulator:
                     continue
                 if self._rng.random() < self.crosstalk_prob:
                     neighbor.fired = True
+                    neighbor.crosstalk_fired = True
                     result.fired_cell_coords.append((nr, nc))
                     result.photons_detected += 1
                     result.crosstalk_fires += 1

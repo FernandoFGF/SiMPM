@@ -15,8 +15,9 @@ class LightSourceDialog(ctk.CTkToplevel):
                  sensor_a_size, sensor_b_size, on_apply):
         super().__init__(parent)
         self.title("Light Source Configuration")
-        self.geometry("520x640")
-        self.resizable(False, False)
+        self.geometry("550x780")
+        self.resizable(True, True)
+        self.minsize(500, 700)
         self.grab_set()
 
         self.config = config
@@ -104,16 +105,21 @@ class LightSourceDialog(ctk.CTkToplevel):
             anchor="w", padx=8, pady=(6, 2))
 
         self._pulse_vars = {}
-        for label, var_attr, unit, default in [
-            ("Voltage", "pulse_voltage", "V", 5.0),
-            ("Width", "pulse_width_ns", "ns", 50.0),
-            ("Resistance", "resistance_ohm", "\u03a9", 100.0),
+        defaults = {
+            "pulse_voltage": self.config.pulse_voltage,
+            "pulse_width_ns": self.config.pulse_width_ns,
+            "resistance_ohm": self.config.resistance_ohm,
+        }
+        for label, var_attr, unit in [
+            ("Voltage", "pulse_voltage", "V"),
+            ("Width", "pulse_width_ns", "ns"),
+            ("Resistance", "resistance_ohm", "\u03a9"),
         ]:
             row = ctk.CTkFrame(pulse_group, fg_color="transparent")
             row.pack(fill="x", padx=8, pady=2)
             ctk.CTkLabel(row, text=label, width=80,
                          anchor="w").pack(side="left")
-            var = tk.StringVar(value=str(default))
+            var = tk.StringVar(value=str(defaults[var_attr]))
             self._pulse_vars[var_attr] = var
             entry = ctk.CTkEntry(row, width=80, textvariable=var)
             entry.pack(side="left")
