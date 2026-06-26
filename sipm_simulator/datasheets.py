@@ -318,8 +318,8 @@ OV_CURVES = {
 SPECTRAL_RESPONSE = {
     "wl":   [200, 250, 300, 350, 400, 450, 500, 550, 600, 650,
              700, 750, 800, 850, 900, 950],
-    "pde25": [0.0, 0.006, 0.009, 0.288, 0.640, 0.722, 0.707, 0.597,
-               0.474, 0.369, 0.280, 0.221, 0.155, 0.088, 0.045, 0.019],
+    "pde25": [0.0, 0.009, 0.012, 0.399, 0.887, 1.0, 0.979, 0.827,
+               0.657, 0.511, 0.388, 0.306, 0.215, 0.122, 0.062, 0.026],
     "pde50": [0.0, 0.003, 0.006, 0.377, 0.871, 1.0, 0.956, 0.806,
                0.639, 0.498, 0.377, 0.267, 0.198, 0.124, 0.093, 0.068],
     "pde75": [0.0, 0.003, 0.006, 0.402, 0.894, 1.0, 0.969, 0.822,
@@ -393,7 +393,7 @@ def apply_wavelength(model_data: dict, wavelength_nm: float) -> float:
     key = {25: "pde25", 50: "pde50", 75: "pde75"}.get(int(pitch), "pde50")
     factor = _interp(wavelength_nm, SPECTRAL_RESPONSE["wl"],
                       SPECTRAL_RESPONSE[key])
-    return model_data["pde"] * max(factor, 0.0)
+    return max(factor, 0.0)
 
 
 def apply_temperature(model_data: dict, temperature_c: float,

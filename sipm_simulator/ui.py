@@ -613,9 +613,9 @@ class App(ctk.CTk):
         pde_a = 0.0
         pde_b = 0.0
         if da["spectral_min_nm"] <= wl <= da["spectral_max_nm"]:
-            pde_a = apply_wavelength(da, wl)
+            pde_a = ov_a["pde"] * apply_wavelength(da, wl)
         if db["spectral_min_nm"] <= wl <= db["spectral_max_nm"]:
-            pde_b = apply_wavelength(db, wl)
+            pde_b = ov_b["pde"] * apply_wavelength(db, wl)
 
         area_a = da["area_mm"] * da["area_mm"]
         area_b = db["area_mm"] * db["area_mm"]
