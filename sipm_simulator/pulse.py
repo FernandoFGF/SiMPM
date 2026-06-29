@@ -38,6 +38,19 @@ class PulseGenerator:
         )
         return pulse
 
+    def _times_to_waveform(self, times_s: "np.ndarray", t_s: "np.ndarray",
+                           amplitude_scale: float = 1.0) -> "np.ndarray":
+        n = len(t_s)
+        if len(times_s) == 0:
+            return np.zeros(n, dtype=np.float64)
+        impulse = np.zeros(n, dtype=np.float64)
+        idx = np.clip(np.searchsorted(t_s, times_s, side='right') - 1,
+                      0, n - 1)
+        np.add.at(impulse, idx, 1)
+        kernel = self._single_pulse(t_s, t_s[0], amplitude_scale)
+        result = np.convolve(impulse, kernel, mode='full')[:n]
+        return result
+
     def generate(self, n_pulses: int = 1,
                  n_afterpulses: int = 0,
                  duration_ns: float = 100.0,
@@ -69,39 +82,44 @@ class PulseGenerator:
         if rng is None:
             rng = np.random.default_rng()
 
-        ap_delay_ns = self.afterpulse_delay * 1e9
+        tail_ns = max(recovery_time_ns, 5.0 * self.tau_fall * 1e9)
+        ap_max_ns = self.afterpulse_delay * 1e9 * 3.0
         duration_ns = (pulse_start_ns + max(pulse_width_ns, 0)
-                       + recovery_time_ns + ap_delay_ns + 40)
+                       + tail_ns + ap_max_ns + 40)
         t_ns = np.linspace(0, duration_ns, n_points)
         t_s = t_ns * 1e-9
+        t_max_s = t_s[-1]
 
         amplitude = np.zeros_like(t_s)
 
-        total_primary = n_pulses + n_crosstalk
-        if total_primary > 0:
+        if n_pulses > 0:
             if pulse_width_ns > 0:
                 primary_times = (
                     pulse_start_ns
-                    + rng.uniform(0, pulse_width_ns, total_primary)
+                    + rng.uniform(0, pulse_width_ns, n_pulses)
                 ) * 1e-9
             else:
-                primary_times = np.full(total_primary,
+                primary_times = np.full(n_pulses,
                                         pulse_start_ns * 1e-9)
-            for t0 in primary_times:
-                amplitude += self._single_pulse(t_s, t0)
+            amplitude += self._times_to_waveform(primary_times, t_s)
 
-        if n_afterpulses > 0:
-            n_ap = min(n_afterpulses, total_primary)
-            ap_times = (np.sort(primary_times[:n_ap])
-                        + self.afterpulse_delay)
-            for t0 in ap_times:
-                amplitude += self._single_pulse(
-                    t_s, t0, self.afterpulse_fraction)
+            if n_crosstalk > 0:
+                parent_idx = rng.integers(0, n_pulses, n_crosstalk)
+                xtalk_times = primary_times[parent_idx]
+                amplitude += self._times_to_waveform(xtalk_times, t_s)
 
+            if n_afterpulses > 0:
+                n_ap = min(n_afterpulses, n_pulses)
+                ap_parent_idx = rng.choice(n_pulses, n_ap, replace=False)
+                ap_delays = rng.exponential(self.afterpulse_delay, n_ap)
+                ap_times = primary_times[ap_parent_idx] + ap_delays
+                ap_times = ap_times[ap_times < t_max_s]
+                if len(ap_times) > 0:
+                    amplitude += self._times_to_waveform(
+                        ap_times, t_s, self.afterpulse_fraction)
         if n_dark > 0:
-            dark_max_ns = duration_ns - 10
-            dark_times = (rng.uniform(0, dark_max_ns, n_dark)) * 1e-9
-            for t0 in dark_times:
-                amplitude += self._single_pulse(t_s, t0)
+            dark_max_s = max((duration_ns - 10) * 1e-9, 1e-9)
+            dark_times = rng.uniform(0, dark_max_s, n_dark)
+            amplitude += self._times_to_waveform(dark_times, t_s)
 
         return Waveform(t_ns, amplitude)
