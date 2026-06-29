@@ -1,5 +1,7 @@
 import numpy as np
 
+_trapezoid = getattr(np, "trapezoid", None) or np.trapz
+
 
 class Waveform:
     def __init__(self, time: np.ndarray, amplitude: np.ndarray):
@@ -12,7 +14,7 @@ class Waveform:
 
     @property
     def charge(self) -> float:
-        return float(np.trapz(self.amplitude, self.time))
+        return float(_trapezoid(self.amplitude, self.time))
 
 
 class PulseGenerator:

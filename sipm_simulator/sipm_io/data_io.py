@@ -2,6 +2,8 @@ import csv
 from pathlib import Path
 import numpy as np
 
+_trapezoid = getattr(np, "trapezoid", None) or np.trapz
+
 
 def load_csv_waveform(filepath: str, time_col: int = 0,
                       amp_col: int = 1, skip_header: bool = True,
@@ -52,8 +54,8 @@ def compare_waveforms(sim_time, sim_amp, exp_time, exp_amp):
         "mean_residual": float(np.mean(np.abs(diff))),
         "sim_peak": float(np.max(sim_amp)),
         "exp_peak": float(np.max(exp_amp)),
-        "sim_charge": float(np.trapz(sim_amp, sim_time)),
-        "exp_charge": float(np.trapz(exp_resampled, sim_time)),
+        "sim_charge": float(_trapezoid(sim_amp, sim_time)),
+        "exp_charge": float(_trapezoid(exp_resampled, sim_time)),
     }
     return exp_resampled, diff, metrics
 

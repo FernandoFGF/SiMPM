@@ -1,6 +1,5 @@
-import sys
-import tkinter as tk
-from pathlib import Path
+﻿import tkinter as tk
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 import numpy as np
@@ -12,116 +11,31 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, \
     NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
-from geometry import SiPMGeometry
-from source import GaussianSource, PointSource, UniformSource
-from simulator import SiPMSimulator
-from pulse import PulseGenerator
-from visualization import plot_hits, plot_occupancy_heatmap, plot_beam_profile
-from datasheets import list_models, get_model, DATASHEETS_DIR, \
-    parse_hamamatsu_datasheet, list_display_names, base_id_to_display, \
-    apply_overvoltage, apply_wavelength, apply_temperature
-from optical_chain import OpticalConfig, calculate_photons, LED_DATABASE
-from light_dialog import LightSourceDialog
-from data_io import load_csv_waveform, compare_waveforms, export_full_results
+from core.geometry import SiPMGeometry
+from core.source import GaussianSource, UniformSource
+from core.simulator import SiPMSimulator
+from core.pulse import PulseGenerator
+from visualization.hits_plots import plot_hits, plot_occupancy_heatmap
+from visualization.beam_plots import plot_beam_profile
+from models.datasheets import (DATASHEETS_DIR, parse_hamamatsu_datasheet,
+                                list_display_names, apply_overvoltage,
+                                apply_wavelength, apply_temperature)
+from optics.optical_chain import OpticalConfig, calculate_photons, LED_DATABASE
+from sipm_io.data_io import (load_csv_waveform, compare_waveforms,
+                              export_full_results)
+
+from .panels.model_selector import ModelSelector
+from .dialogs.light_dialog import LightSourceDialog
+from .dialogs.curve_editor import CurveEditorDialog
 
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
 
-class NumberEntry(ctk.CTkFrame):
-    def __init__(self, parent, value=0.0, is_int=False, **kwargs):
-        super().__init__(parent, fg_color="transparent", **kwargs)
-        self.is_int = is_int
-        vcmd = (self.register(self._validate), '%P')
-        self.entry = ctk.CTkEntry(self, width=100, validate="key",
-                                   validatecommand=vcmd)
-        self.entry.pack(side="left", fill="x", expand=True)
-        self.set_value(value)
-
-    def _validate(self, new_value):
-        if new_value == "" or new_value == "-":
-            return True
-        try:
-            float(new_value)
-            return True
-        except ValueError:
-            return False
-
-    def get_value(self):
-        try:
-            val = float(self.entry.get())
-            return int(val) if self.is_int else val
-        except ValueError:
-            return 0
-
-    def set_value(self, value):
-        self.entry.delete(0, "end")
-        if self.is_int:
-            self.entry.insert(0, str(int(value)))
-        else:
-            self.entry.insert(0, f"{float(value):.2f}")
-
-
-
-
-class ModelSelector(ctk.CTkFrame):
-    def __init__(self, parent, label_text, default_model, **kwargs):
-        super().__init__(parent, **kwargs)
-
-        ctk.CTkLabel(self, text=label_text,
-                     font=ctk.CTkFont(size=13, weight="bold")).pack(
-            anchor="w")
-
-        display_names = list_display_names()
-        self.combo = ctk.CTkComboBox(self, values=display_names,
-                                     command=self._on_select)
-        if default_model in display_names:
-            self.combo.set(default_model)
-        elif display_names:
-            self.combo.set(display_names[0])
-        self.combo.pack(fill="x", pady=2)
-
-        self.info = ctk.CTkTextbox(self, height=195, font=ctk.CTkFont(
-            family="Consolas", size=11), wrap="none")
-        self.info.pack(fill="x", pady=4)
-        self._refresh_info()
-
-    def _refresh_info(self):
-        self._on_select(self.combo.get())
-
-    def _on_select(self, choice):
-        d = get_model(choice)
-        if not d:
-            self.info.delete("1.0", "end")
-            self.info.insert("1.0", "Model not found")
-            return
-        lines = [
-            f"Pixels:     {d['pixels']} ({d['nx']}x{d['ny']})",
-            f"Pitch:      {d['pitch']} um",
-            f"Area:       {d['area_mm']}x{d['area_mm']} mm",
-            f"Fill Factor:{d['fill_factor']:.0%}",
-            f"PDE:        {d['pde']:.0%} (@450nm)",
-            f"Gain:       {d['gain']:.2e}",
-            f"Vbr:        {d['breakdown_v']} V",
-            f"Nominal Vop:{d['vop']}",
-            f"DCR typ:    {d['dcr_typ_kcps']:.0f} kcps",
-            f"DCR max:    {d['dcr_max_kcps']:.0f} kcps",
-            f"Capacitance:{d['capacitance_pf']:.0f} pF",
-            f"Crosstalk:  {d['crosstalk']*100:.1f}%",
-            f"Pulse fall: {d['pulse_fall_ns']:.0f} ns",
-            f"Recovery:   {d['recovery_ns']:.0f} ns",
-            f"Spectral:   {d['spectral_min_nm']}-{d['spectral_max_nm']} nm",
-            f"dV/dT:      {d['temp_coeff_mv']} mV/C",
-            f"Package:    {', '.join(d['packages'])}",
-        ]
-        self.info.delete("1.0", "end")
-        self.info.insert("1.0", "\n".join(lines))
-
-
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SiPM Digital Twin — Model Comparison")
+        self.title("SiPM Digital Twin \u2014 Model Comparison")
         self.geometry("1480x920")
         self.minsize(1200, 750)
 
@@ -269,12 +183,12 @@ class App(ctk.CTk):
                                          variable=self.temp_var,
                                          command=self._on_temp_change)
         self.temp_scale.pack(side="left", fill="x", expand=True, padx=4)
-        self.temp_label = ctk.CTkLabel(row_temp, text="25 °C", width=40)
+        self.temp_label = ctk.CTkLabel(row_temp, text="25 \u00b0C", width=40)
         self.temp_label.pack(side="right")
 
         note_cond = ctk.CTkLabel(
             op_frame,
-            text="λ comes from the light source config.\n"
+            text="\u03bb comes from the light source config.\n"
                  "Overvoltage affects PDE, gain, crosstalk.",
             font=ctk.CTkFont(size=9, slant="italic"),
             text_color="gray")
@@ -504,6 +418,7 @@ class App(ctk.CTk):
         self.temp_label.configure(text=f"{float(val):.0f} \u00b0C")
 
     def _on_quick_pulse(self):
+        from models.datasheets import get_model
         ma = self.model_a_sel.combo.get()
         mb = self.model_b_sel.combo.get()
         da = get_model(ma)
@@ -517,13 +432,14 @@ class App(ctk.CTk):
         except ValueError:
             self._status("Invalid photon count or wavelength")
             return
+        pulse_width_ns = self._optical_config.pulse_width_ns
         r = {
             "photons": max(n_photons, 1),
             "wavelength_nm": wavelength,
             "fwhm_nm": 2,
             "config_type": "LED",
             "led_type": "Quick Pulse",
-            "pulse_width_ns": 0.0,
+            "pulse_width_ns": pulse_width_ns,
             "pulse_voltage": 5.0,
             "distance_cm": 10.0,
             "beam_sigma_um": 1e6,
@@ -547,6 +463,7 @@ class App(ctk.CTk):
             self._status(f"Error: {e}")
 
     def _on_compare(self):
+        from models.datasheets import get_model
         ma = self.model_a_sel.combo.get()
         mb = self.model_b_sel.combo.get()
         da = get_model(ma)
@@ -778,7 +695,7 @@ class App(ctk.CTk):
         self.beam_b_canvas.draw()
 
     def _update_spec_tab(self):
-        from datasheets import SPECTRAL_RESPONSE, OV_CURVES
+        from models.datasheets import SPECTRAL_RESPONSE, OV_CURVES
         self.spec_fig.clear()
         gs = self.spec_fig.add_gridspec(2, 3, height_ratios=[1, 1])
         ax_spec = self.spec_fig.add_subplot(gs[0, :])
@@ -910,7 +827,7 @@ class App(ctk.CTk):
             ax.set_title(f"{'A' if ax is ax_a else 'B'}: {nm}", fontsize=9,
                          color=clr)
         self.wave_fig.suptitle(
-            f"Waveform — {self._result_a.total_firings} vs "
+            f"Waveform \u2014 {self._result_a.total_firings} vs "
             f"{self._result_b.total_firings} primary firings",
             fontsize=11, fontweight='bold')
         self.wave_fig.tight_layout()
@@ -951,7 +868,8 @@ class App(ctk.CTk):
             ("Peak amplitude", wf_a.peak, wf_b.peak),
             ("Integrated charge", wf_a.charge, wf_b.charge),
         ]
-        def fmt_val_a(v):
+
+        def fmt_val(v):
             if v is None:
                 return ""
             if isinstance(v, float) and abs(v) < 0.1:
@@ -963,25 +881,14 @@ class App(ctk.CTk):
             elif isinstance(v, float):
                 return f"{v:.1f}"
             return str(v)
-        def fmt_val_b(v):
-            if v is None:
-                return ""
-            if isinstance(v, float) and abs(v) < 0.1:
-                return f"{v:.2%}"
-            elif isinstance(v, float) and abs(v) > 1e3:
-                return f"{v:.2e}"
-            elif isinstance(v, float) and abs(v) < 20:
-                return f"{v:.3f}"
-            elif isinstance(v, float):
-                return f"{v:.1f}"
-            return str(v)
+
         lines = [header, sep]
         for name, va, vb in rows:
             if va is None and vb is None:
                 lines.append("")
                 continue
             lines.append(
-                f"{name:<28} {fmt_val_a(va):>14} {fmt_val_b(vb):>14}")
+                f"{name:<28} {fmt_val(va):>14} {fmt_val(vb):>14}")
         ratios = []
         if ra.fired_cells > 0 and rb.fired_cells > 0:
             ratios.append(
@@ -1014,7 +921,6 @@ class App(ctk.CTk):
         self._status(f"Scanned {len(pdfs)} PDF(s), catalog: {len(display_names)} groups")
 
     def _save_config(self):
-        from tkinter import filedialog
         path = filedialog.asksaveasfilename(
             defaultextension=".yaml",
             filetypes=[("YAML Files", "*.yaml"), ("All Files", "*.*")])
@@ -1030,7 +936,7 @@ class App(ctk.CTk):
         self._status(f"Config saved to {path}")
 
     def _load_config(self):
-        from tkinter import filedialog
+        from models.datasheets import get_model
         path = filedialog.askopenfilename(
             filetypes=[("YAML Files", "*.yaml"), ("All Files", "*.*")])
         if not path:
@@ -1054,13 +960,13 @@ class App(ctk.CTk):
                 self._optical_config = OpticalConfig.from_dict(
                     data["optical"])
             elif "beam" in data:
-                pass
+                self._status(
+                    "Config contains legacy 'beam' key, ignored")
             self._status(f"Loaded {path}")
         except Exception as e:
             self._status(f"Error loading config: {e}")
 
     def _load_experimental(self):
-        from tkinter import filedialog
         path = filedialog.askopenfilename(
             filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")])
         if not path:
@@ -1110,7 +1016,6 @@ class App(ctk.CTk):
             self._status(f"Error: {e}")
 
     def _export_csv(self):
-        from tkinter import filedialog
         if self._wf_a is None:
             self._status("Run comparison first.")
             return
@@ -1125,7 +1030,6 @@ class App(ctk.CTk):
         self._status(f"Exported to {path}")
 
     def _export_full_results(self):
-        from tkinter import filedialog
         if self._result_a is None and self._result_b is None:
             self._status("Run comparison first.")
             return
@@ -1167,10 +1071,9 @@ class App(ctk.CTk):
             self._status(f"Export error: {e}")
 
     def _show_about(self):
-        from tkinter import messagebox
         messagebox.showinfo(
             "About",
-            "SiPM Digital Twin — Model Comparison\n\n"
+            "SiPM Digital Twin \u2014 Model Comparison\n\n"
             "Compare two SiPM models under\n"
             "identical light source conditions.\n\n"
             "Models from datasheet catalog.\n"
@@ -1185,269 +1088,13 @@ class App(ctk.CTk):
         self._update_spec_tab()
 
     def _reset_curves(self):
-        from datasheets import CURVES_FILE
+        from models.datasheets import CURVES_FILE
         if CURVES_FILE.exists():
             CURVES_FILE.unlink()
-        import datasheets
+        import models.datasheets as datasheets
         datasheets._load_user_curves()
         self._update_spec_tab()
         self._status("Curves reset to defaults")
-
-
-class CurveEditorDialog(ctk.CTkToplevel):
-    def __init__(self, parent, on_save):
-        super().__init__(parent)
-        self.title("Edit Datasheet Curves")
-        self.geometry("950x700")
-        self.minsize(800, 600)
-        self.grab_set()
-        self.on_save = on_save
-        from datasheets import SPECTRAL_RESPONSE, OV_CURVES, save_user_curves
-        self._save_fn = save_user_curves
-        self._spectral = {k: list(v) for k, v in SPECTRAL_RESPONSE.items()}
-        self._ov = {int(k): {sk: list(sv) for sk, sv in v.items()}
-                    for k, v in OV_CURVES.items()}
-        self._ov_axes = {}
-        self._ov_markers = {}
-        self._ov_lines = {}
-        self._ov_key_map = {}
-        self._ov_figs = []
-        self._dragging = None
-        self._drag_index = None
-        self._drag_curve_key = None
-        self._drag_curve_type = None
-        self._build()
-
-    def _build(self):
-        self._notebook = ctk.CTkTabview(self, width=920, height=580)
-        self._notebook.pack(fill="both", expand=True, padx=8, pady=8)
-        self._build_spectral_tab()
-        self._build_ov_tab()
-
-    def _build_spectral_tab(self):
-        tab = self._notebook.add("Spectral Response")
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure(0, weight=0)
-        tab.grid_rowconfigure(1, weight=1)
-        header = ctk.CTkFrame(tab, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(2, 0))
-        ctk.CTkLabel(header, text="Drag points to adjust",
-                     font=ctk.CTkFont(size=10, slant="italic"),
-                     text_color="gray").pack(side="left")
-        ctk.CTkButton(header, text="Save && Close", width=90, height=24,
-                      font=ctk.CTkFont(size=10, weight="bold"),
-                      command=self._save).pack(side="right", padx=4)
-        self._spec_fig = Figure(figsize=(8, 4.5), dpi=100)
-        self._spec_canvas = FigureCanvasTkAgg(self._spec_fig, tab)
-        self._spec_canvas.get_tk_widget().grid(row=1, column=0, sticky="nsew",
-                                                padx=4, pady=4)
-        self._spec_ax = self._spec_fig.add_subplot(111)
-        self._draw_spectral()
-        self._spec_canvas.mpl_connect("button_press_event",
-                                       self._on_spec_click)
-        self._spec_canvas.mpl_connect("motion_notify_event",
-                                       self._on_spec_drag)
-        self._spec_canvas.mpl_connect("button_release_event",
-                                       self._on_spec_release)
-
-    def _draw_spectral(self):
-        self._spec_ax.clear()
-        self._spec_lines = {}
-        self._spec_markers = {}
-        colors = {'pde25': '#1e88e5', 'pde50': '#ff8f00', 'pde75': '#00897b'}
-        nominal_pde = {'pde25': 0.35, 'pde50': 0.40, 'pde75': 0.50}
-        wl = self._spectral["wl"]
-        for key, label in [("pde25", "25um"), ("pde50", "50um"),
-                           ("pde75", "75um")]:
-            y_abs = [v * nominal_pde[key] * 100 for v in self._spectral[key]]
-            line, = self._spec_ax.plot(wl, y_abs, color=colors[key],
-                                       linewidth=1.2, alpha=0.4)
-            marker, = self._spec_ax.plot(wl, y_abs, 'o', color=colors[key],
-                                         markersize=8, picker=8,
-                                         label=f"{label} "
-                                               f"(peak={max(y_abs):.0f}%)")
-            self._spec_lines[key] = line
-            self._spec_markers[key] = marker
-        self._spec_ax.set_xlabel("Wavelength (nm)")
-        self._spec_ax.set_ylabel("Absolute PDE (%)")
-        self._spec_ax.set_title("Drag points to adjust")
-        self._spec_ax.set_ylim(0, None)
-        self._spec_ax.yaxis.set_major_locator(
-            matplotlib.ticker.MultipleLocator(5))
-        self._spec_ax.yaxis.set_minor_locator(
-            matplotlib.ticker.MultipleLocator(1))
-        self._spec_ax.grid(True, alpha=0.3)
-        self._spec_ax.grid(True, which='minor', alpha=0.1)
-        self._spec_ax.legend(fontsize=9)
-        self._spec_fig.tight_layout()
-        self._spec_canvas.draw()
-
-    def _on_spec_click(self, event):
-        if event.inaxes != self._spec_ax:
-            return
-        if self._dragging is not None:
-            return
-        for key, marker in self._spec_markers.items():
-            contains, info = marker.contains(event)
-            if contains:
-                idx = info["ind"][0]
-                self._dragging = "spectral"
-                self._drag_curve_key = key
-                self._drag_index = idx
-                return
-
-    def _on_spec_drag(self, event):
-        if self._dragging != "spectral":
-            return
-        if event.inaxes != self._spec_ax or event.ydata is None:
-            return
-        nominal_pde = {'pde25': 0.35, 'pde50': 0.40, 'pde75': 0.50}
-        scale = nominal_pde[self._drag_curve_key] * 100
-        new_norm = max(0.0, min(1.0, event.ydata / max(scale, 1)))
-        self._spectral[self._drag_curve_key][self._drag_index] = new_norm
-        self._redraw_spectral_fast()
-
-    def _on_spec_release(self, event):
-        if self._dragging == "spectral":
-            self._dragging = None
-            self._redraw_spectral_fast()
-
-    def _redraw_spectral_fast(self):
-        nominal_pde = {'pde25': 0.35, 'pde50': 0.40, 'pde75': 0.50}
-        for key in self._spec_markers:
-            y_abs = [v * nominal_pde[key] * 100
-                     for v in self._spectral[key]]
-            self._spec_lines[key].set_ydata(y_abs)
-            self._spec_markers[key].set_ydata(y_abs)
-        self._spec_canvas.draw_idle()
-
-    def _build_ov_tab(self):
-        for tab_name, tab_id, data_key, ylabel, divider, ylims, yticks in [
-            ("PDE vs Vov", "pde", "pde", "PDE (%)", 1,
-             (10, 70), (10, 5)),
-            ("Crosstalk vs Vov", "xtalk", "xtalk", "Crosstalk (%)", 1,
-             (0, 25), (10, 5)),
-        ]:
-            self._build_single_ov_tab(tab_name, tab_id, data_key,
-                                      ylabel, divider, ylims, yticks,
-                                      all_pitches=True)
-        gain_info = [(25, 1.6e6, 0), (50, 6e6, 0), (75, 1.6e7, 0)]
-        for pitch, ymax, ymin in gain_info:
-            self._build_single_ov_tab(
-                f"Gain {pitch}\u00b5m", f"gain{pitch}", "gain",
-                f"Gain {pitch}\u00b5m", 1,
-                (ymin, ymax * 1.05), None,
-                single_pitch=pitch)
-
-    def _build_single_ov_tab(self, tab_name, tab_id, data_key,
-                             ylabel, divider, ylims, yticks,
-                             all_pitches=False, single_pitch=None,
-                             use_log=False):
-        tab = self._notebook.add(tab_name)
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure(0, weight=0)
-        tab.grid_rowconfigure(1, weight=1)
-        header = ctk.CTkFrame(tab, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(2, 0))
-        ctk.CTkLabel(header, text="Drag points to adjust",
-                     font=ctk.CTkFont(size=10, slant="italic"),
-                     text_color="gray").pack(side="left")
-        ctk.CTkButton(header, text="Save && Close", width=90, height=24,
-                      font=ctk.CTkFont(size=10, weight="bold"),
-                      command=self._save).pack(side="right", padx=4)
-        fig = Figure(figsize=(7, 4.5), dpi=100)
-        canvas = FigureCanvasTkAgg(fig, tab)
-        canvas.get_tk_widget().grid(row=1, column=0, sticky="nsew",
-                                     padx=4, pady=4)
-        ax = fig.add_subplot(111)
-        self._ov_axes[tab_id] = ax
-        self._ov_markers[tab_id] = {}
-        self._ov_lines[tab_id] = {}
-        self._ov_key_map[tab_id] = data_key
-        self._ov_figs.append((fig, canvas))
-        colors = {25: '#1e88e5', 50: '#ff8f00', 75: '#00897b'}
-        pitches = [single_pitch] if single_pitch else [25, 50, 75]
-        for pitch in pitches:
-            c = self._ov[pitch]
-            y_vals = [v / divider for v in c[data_key]]
-            label = f"{pitch}\u00b5m" if all_pitches else None
-            line, = ax.plot(c["vov"], y_vals, color=colors[pitch],
-                            linewidth=1.5, alpha=0.4, label=label)
-            marker, = ax.plot(c["vov"], y_vals, 'o',
-                              color=colors[pitch],
-                              markersize=8, picker=8, label=label)
-            self._ov_lines[tab_id][pitch] = line
-            self._ov_markers[tab_id][pitch] = marker
-        ax.set_xlabel("Overvoltage (V)")
-        ax.set_ylabel(ylabel)
-        ax.set_title(tab_name)
-        ax.set_xlim(0, 10)
-        if use_log:
-            ax.set_yscale("log")
-        if ylims:
-            ax.set_ylim(ylims[0], ylims[1])
-        if yticks:
-            ax.yaxis.set_major_locator(
-                matplotlib.ticker.MultipleLocator(yticks[0]))
-            ax.yaxis.set_minor_locator(
-                matplotlib.ticker.MultipleLocator(yticks[1]))
-        if all_pitches:
-            ax.legend(fontsize=9, loc='upper left')
-        ax.grid(True, alpha=0.3)
-        ax.grid(True, which='minor', alpha=0.1)
-        canvas.mpl_connect("button_press_event",
-                           lambda e, p=tab_id: self._on_ov_click(e, p))
-        canvas.mpl_connect("motion_notify_event",
-                           lambda e, p=tab_id: self._on_ov_drag(e, p))
-        canvas.mpl_connect("button_release_event",
-                           self._on_ov_release)
-
-    def _on_ov_click(self, event, param):
-        if event.inaxes != self._ov_axes.get(param):
-            return
-        if self._dragging is not None:
-            return
-        for pitch, marker in self._ov_markers[param].items():
-            contains, info = marker.contains(event)
-            if contains:
-                idx = info["ind"][0]
-                self._dragging = "ov"
-                self._drag_curve_type = param
-                self._drag_curve_key = pitch
-                self._drag_index = idx
-                return
-
-    def _on_ov_drag(self, event, param):
-        if self._dragging != "ov" or self._drag_curve_type != param:
-            return
-        ax = self._ov_axes.get(param)
-        if ax is None or event.inaxes != ax or event.ydata is None:
-            return
-        new_raw = max(0.0, event.ydata)
-        pitch = self._drag_curve_key
-        dk = self._ov_key_map.get(param, param)
-        self._ov[pitch][dk][self._drag_index] = new_raw
-        y_disp = list(self._ov[pitch][dk])
-        self._ov_lines[param][pitch].set_ydata(y_disp)
-        self._ov_markers[param][pitch].set_ydata(y_disp)
-        idx = list(self._ov_axes.keys()).index(param)
-        self._ov_figs[idx][1].draw_idle()
-
-    def _on_ov_release(self, event):
-        if self._dragging == "ov":
-            self._dragging = None
-
-    def _save(self):
-        new_spectral = {
-            "wl": self._spectral["wl"],
-            "pde25": self._spectral["pde25"],
-            "pde50": self._spectral["pde50"],
-            "pde75": self._spectral["pde75"],
-        }
-        new_ov = {pitch: dict(self._ov[pitch]) for pitch in [25, 50, 75]}
-        self._save_fn(new_spectral, new_ov)
-        self.on_save()
-        self.destroy()
 
 
 def main():

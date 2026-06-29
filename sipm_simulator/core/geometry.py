@@ -205,6 +205,10 @@ class _CellRef:
     @fired.setter
     def fired(self, value: bool):
         self._sipm._fired[self._row, self._col] = value
+        if not value:
+            self._sipm._dark_fired[self._row, self._col] = False
+            self._sipm._crosstalk_fired[self._row, self._col] = False
+            self._sipm._afterpulse_fired[self._row, self._col] = False
 
     @property
     def dark_fired(self) -> bool:
@@ -213,6 +217,8 @@ class _CellRef:
     @dark_fired.setter
     def dark_fired(self, value: bool):
         self._sipm._dark_fired[self._row, self._col] = value
+        if value:
+            self._sipm._fired[self._row, self._col] = True
 
     @property
     def afterpulse_fired(self) -> bool:
@@ -221,6 +227,8 @@ class _CellRef:
     @afterpulse_fired.setter
     def afterpulse_fired(self, value: bool):
         self._sipm._afterpulse_fired[self._row, self._col] = value
+        if value:
+            self._sipm._fired[self._row, self._col] = True
 
     @property
     def crosstalk_fired(self) -> bool:
@@ -229,6 +237,8 @@ class _CellRef:
     @crosstalk_fired.setter
     def crosstalk_fired(self, value: bool):
         self._sipm._crosstalk_fired[self._row, self._col] = value
+        if value:
+            self._sipm._fired[self._row, self._col] = True
 
     @property
     def photons_received(self) -> int:

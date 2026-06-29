@@ -1,6 +1,6 @@
 import tkinter as tk
 import customtkinter as ctk
-from optical_chain import LED_DATABASE, OpticalConfig, calculate_photons
+from optics.optical_chain import LED_DATABASE, OpticalConfig, calculate_photons
 
 
 def _safe_float(var, default=0.0):

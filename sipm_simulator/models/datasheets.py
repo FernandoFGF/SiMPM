@@ -2,6 +2,7 @@ import re
 import math
 import json
 from pathlib import Path
+import numpy as np
 import pdfplumber
 
 
@@ -172,6 +173,8 @@ def list_display_names() -> list[str]:
 
 
 def get_model(key: str) -> dict | None:
+    if not key:
+        return None
     if key in CATALOG:
         return CATALOG[key]
     for k, v in CATALOG.items():
@@ -179,7 +182,11 @@ def get_model(key: str) -> dict | None:
             return v
         if key in v.get("packages", []):
             return v
-        if key.lower() in k.lower():
+    key_lower = key.lower()
+    for k, v in CATALOG.items():
+        if k.lower() == key_lower:
+            return v
+        if v["display_name"].lower() == key_lower:
             return v
     return None
 
@@ -409,6 +416,3 @@ def apply_temperature(model_data: dict, temperature_c: float,
         "vov_effective": max(vov_effective, 0.1),
         "vov_nominal": vov_nominal,
     }
-
-
-import numpy as np
