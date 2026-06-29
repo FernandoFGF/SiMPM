@@ -47,6 +47,8 @@ def _spectral_overlap(led_wl_nm, led_fwhm_nm, mono_wl_nm, mono_fwhm_nm):
     if sigma_sum_sq <= 0:
         return 1.0
     return np.exp(-4.0 * np.log(2.0) * d**2 / sigma_sum_sq)
+MONOCHROMATOR_FWHM_NM = 2.0
+MONOCHROMATOR_BEAM_DIV_MRAD = 5.0
 MONO_COUPLING = 0.15
 
 
