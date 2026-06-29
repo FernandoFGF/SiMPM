@@ -545,8 +545,8 @@ class App(ctk.CTk):
 
         area_a = da["area_mm"] * da["area_mm"]
         area_b = db["area_mm"] * db["area_mm"]
-        dcr_a = (ov_a["dcr_typ_kcps"] * 1000 * da["pixels"]) / area_a
-        dcr_b = (ov_b["dcr_typ_kcps"] * 1000 * db["pixels"]) / area_b
+        dcr_a = (temp_a["dcr_typ_kcps_effective"] * 1000 * da["pixels"]) / area_a
+        dcr_b = (temp_b["dcr_typ_kcps_effective"] * 1000 * db["pixels"]) / area_b
 
         sipm_a = SiPMGeometry(da["nx"], da["ny"], da["pitch"],
                                da["fill_factor"])
@@ -557,12 +557,12 @@ class App(ctk.CTk):
         sim_a = SiPMSimulator(sipm_a, pde=pde_a, gain=ov_a["gain"],
                               dcr=dcr_a,
                               crosstalk_prob=ov_a["crosstalk"],
-                              afterpulse_prob=da["afterpulse"],
+                              afterpulse_prob=ov_a["afterpulse"],
                               dcr_time_window_ns=dcr_window)
         sim_b = SiPMSimulator(sipm_b, pde=pde_b, gain=ov_b["gain"],
                               dcr=dcr_b,
                               crosstalk_prob=ov_b["crosstalk"],
-                              afterpulse_prob=db["afterpulse"],
+                              afterpulse_prob=ov_b["afterpulse"],
                               dcr_time_window_ns=dcr_window)
 
         sim_a.seed(seed)

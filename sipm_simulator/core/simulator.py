@@ -15,6 +15,7 @@ class SimulationResult:
         self.fired_cells: int = 0
         self.total_cells: int = 0
         self.dark_counts: int = 0
+        self.dark_firings: int = 0
         self.crosstalk_fires: int = 0
         self.afterpulse_fires: int = 0
         self.fired_cell_coords: list[tuple[int, int]] = []
@@ -60,9 +61,10 @@ class SimulationResult:
             f"  effective_pde         = {self.effective_pde:.4f}\n"
             f"  fired_cells           = {self.fired_cells}/{self.total_cells}\n"
             f"  occupancy             = {self.occupancy:.2%}\n"
-            f"  dark_counts           = {self.dark_counts}\n"
+            f"  dark_counts           = {self.dark_counts} (fired={self.dark_firings})\n"
             f"  crosstalk_fires       = {self.crosstalk_fires}\n"
             f"  afterpulse_fires      = {self.afterpulse_fires}\n"
+            f"  total_firings         = {self.total_firings}\n"
             f"  snr                   = {self.snr:.2f}\n"
             f")"
         )
@@ -154,7 +156,9 @@ class SiPMSimulator:
             result.photons_detected += 1
             result.fired_cell_coords.append((r, c))
 
-        result.total_firings = result.photons_detected
+        result.total_firings = (result.photons_detected
+                                + result.dark_firings
+                                + result.crosstalk_fires)
 
         result.photons_out_of_bounds = int(np.sum(~in_bounds))
         result.photons_in_dead_area = int(np.sum(in_bounds & ~in_active))
@@ -182,8 +186,9 @@ class SiPMSimulator:
 
         self.sipm.reset()
 
+        dark_fire_times: dict[tuple[int, int], float] = {}
         if self.dcr > 0:
-            self._inject_dark_counts(result, pulse_width_ns)
+            self._inject_dark_counts(result, pulse_width_ns, dark_fire_times)
 
         photons = source.generate(n_photons, sipm=self.sipm, rng=self.rng)
         xs = np.array([p.x for p in photons])
@@ -258,7 +263,9 @@ class SiPMSimulator:
                 "time_ns": float(t_arrival),
             })
 
-        result.total_firings = primary_firings
+        result.total_firings = (primary_firings
+                                + result.dark_firings
+                                + result.crosstalk_fires)
 
         result.photons_out_of_bounds = int(np.sum(~in_bounds))
         result.photons_in_dead_area = int(np.sum(in_bounds & ~in_active))
@@ -269,15 +276,17 @@ class SiPMSimulator:
                                  + result.photons_pde_rejected)
 
         if self.crosstalk_prob > 0:
-            self._apply_crosstalk(result, cell_fire_times)
+            self._apply_crosstalk(result, cell_fire_times, dark_fire_times)
         if self.afterpulse_prob > 0:
-            self._generate_afterpulses(result, cell_fire_times, recovery_time_ns)
+            self._generate_afterpulses(result, cell_fire_times, dark_fire_times,
+                                       recovery_time_ns)
 
         result.fired_cells = self.sipm.fired_cells
         return result
 
     def _inject_dark_counts(self, result: SimulationResult,
-                             pulse_width_ns: float = 50.0):
+                             pulse_width_ns: float = 50.0,
+                             dark_fire_times: dict = None):
         area_mm2 = (self.sipm.width * self.sipm.height) / 1e6
         expected = self.dcr * area_mm2 * self.dcr_time_window_s
         n_dark = self._rng.poisson(expected)
@@ -293,7 +302,9 @@ class SiPMSimulator:
                 cell.fired = True
                 cell.dark_fired = True
                 result.fired_cell_coords.append((row, col))
-                result.photons_detected += 1
+                result.dark_firings += 1
+                if dark_fire_times is not None:
+                    dark_fire_times[(int(row), int(col))] = t_ns
             result.events.append({
                 "type": "dark",
                 "row": int(row), "col": int(col),
@@ -302,23 +313,32 @@ class SiPMSimulator:
             })
 
     def _apply_crosstalk(self, result: SimulationResult,
-                          cell_fire_times: dict = None):
+                          cell_fire_times: dict = None,
+                          dark_fire_times: dict = None):
         fired_snapshot = list(result.fired_cell_coords)
-        neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        neighbors = [((-1, 0), 1.0), ((1, 0), 1.0), ((0, -1), 1.0),
+                     ((0, 1), 1.0),
+                     ((-1, -1), 1.0 / np.sqrt(2)),
+                     ((-1, 1), 1.0 / np.sqrt(2)),
+                     ((1, -1), 1.0 / np.sqrt(2)),
+                     ((1, 1), 1.0 / np.sqrt(2))]
 
         for row, col in fired_snapshot:
-            trigger_time = (cell_fire_times.get((row, col), 0.0)
-                            if cell_fire_times else 0.0)
-            for dr, dc in neighbors:
+            trigger_time = 0.0
+            if cell_fire_times and (row, col) in cell_fire_times:
+                trigger_time = cell_fire_times[(row, col)]
+            elif dark_fire_times and (row, col) in dark_fire_times:
+                trigger_time = dark_fire_times[(row, col)]
+            for (dr, dc), dist_factor in neighbors:
                 nr, nc = row + dr, col + dc
                 neighbor = self.sipm.get_cell(nr, nc)
                 if neighbor is None or neighbor.fired:
                     continue
-                if self._rng.random() < self.crosstalk_prob:
+                p_eff = self.crosstalk_prob * dist_factor
+                if self._rng.random() < p_eff:
                     neighbor.fired = True
                     neighbor.crosstalk_fired = True
                     result.fired_cell_coords.append((nr, nc))
-                    result.photons_detected += 1
                     result.crosstalk_fires += 1
                     t_ns = float(trigger_time)
                     result.events.append({
@@ -330,31 +350,41 @@ class SiPMSimulator:
 
     def _generate_afterpulses(self, result: SimulationResult,
                                cell_fire_times: dict = None,
-                               recovery_time_ns: float = 20.0):
+                               dark_fire_times: dict = None,
+                               recovery_time_ns: float = 20.0,
+                               secondary_factor: float = 0.5):
         fired_snapshot = list(result.fired_cell_coords)
         for row, col in fired_snapshot:
             cell = self.sipm.cells[row][col]
             if not cell.fired:
                 continue
-            if cell.dark_fired or cell.crosstalk_fired or cell.afterpulse_fired:
+            if cell.afterpulse_fired:
                 continue
-            if self._rng.random() < self.afterpulse_prob:
-                trigger_time = (cell_fire_times.get((row, col), 0.0)
-                                if cell_fire_times else 0.0)
-                delay_ns = float(self._rng.exponential(
-                    self.afterpulse_delay * 1e9))
-                t_ns = float(trigger_time) + delay_ns
-                fired = delay_ns >= recovery_time_ns
-                if fired:
-                    cell.afterpulse_fired = True
-                    result.afterpulse_fires += 1
-                result.events.append({
-                    "type": "afterpulse",
-                    "row": int(row), "col": int(col),
-                    "time_ns": t_ns,
-                    "delay_ns": delay_ns,
-                    "fired": fired,
-                })
+            if cell.dark_fired or cell.crosstalk_fired:
+                p_eff = self.afterpulse_prob * secondary_factor
+            else:
+                p_eff = self.afterpulse_prob
+            if self._rng.random() >= p_eff:
+                continue
+            trigger_time = 0.0
+            if cell_fire_times and (row, col) in cell_fire_times:
+                trigger_time = cell_fire_times[(row, col)]
+            elif dark_fire_times and (row, col) in dark_fire_times:
+                trigger_time = dark_fire_times[(row, col)]
+            delay_ns = float(self._rng.exponential(
+                self.afterpulse_delay * 1e9))
+            t_ns = float(trigger_time) + delay_ns
+            fired = delay_ns >= recovery_time_ns
+            if fired:
+                cell.afterpulse_fired = True
+                result.afterpulse_fires += 1
+            result.events.append({
+                "type": "afterpulse",
+                "row": int(row), "col": int(col),
+                "time_ns": t_ns,
+                "delay_ns": delay_ns,
+                "fired": fired,
+            })
 
 
 class ArraySimulationResult:

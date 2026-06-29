@@ -62,6 +62,7 @@ class OpticalConfig:
         self.resistance_ohm = 100.0
         self.monochromator_wl_nm = 450.0
         self.attenuation_db = 0.0
+        self.background_photons = 0.0
 
     def to_dict(self):
         return {
@@ -73,6 +74,7 @@ class OpticalConfig:
             "resistance_ohm": self.resistance_ohm,
             "monochromator_wl_nm": self.monochromator_wl_nm,
             "attenuation_db": self.attenuation_db,
+            "background_photons": self.background_photons,
         }
 
     @classmethod
@@ -87,15 +89,20 @@ class OpticalConfig:
         c.monochromator_wl_nm = d.get("monochromator_wl_nm",
                                        c.monochromator_wl_nm)
         c.attenuation_db = d.get("attenuation_db", 0.0)
+        c.background_photons = d.get("background_photons", 0.0)
         return c
 
 
 def _led_direct_fraction(distance_m: float, sensor_w_m: float,
                          sensor_h_m: float) -> float:
-    area = sensor_w_m * sensor_h_m
-    if area <= 0 or distance_m <= 0:
+    if sensor_w_m <= 0 or sensor_h_m <= 0 or distance_m <= 0:
         return 0.0
-    return area / (np.pi * distance_m ** 2)
+    dx = sensor_w_m / 2
+    dy = sensor_h_m / 2
+    d2 = distance_m * distance_m
+    fx = 1.0 - distance_m / np.sqrt(d2 + dx * dx)
+    fy = 1.0 - distance_m / np.sqrt(d2 + dy * dy)
+    return fx * fy
 
 
 def _compute_beam_sigma_um(config_type: str, distance_m: float,
@@ -227,6 +234,9 @@ def calculate_photons(config: OpticalConfig,
     if config.attenuation_db > 0:
         att_factor = 10 ** (-config.attenuation_db / 10)
         photons_at_sensor = int(round(photons_at_sensor * att_factor))
+
+    background = int(round(config.background_photons))
+    photons_at_sensor = max(0, photons_at_sensor + background)
 
     beam_sigma_um = _compute_beam_sigma_um(config.config_type, distance_m,
                                             sensor_w_m, sensor_h_m)

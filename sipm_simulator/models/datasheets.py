@@ -305,6 +305,7 @@ OV_CURVES = {
         "gain":  [2.93e5, 4.25e5, 5.60e5, 7.15e5, 8.64e5, 1.02e6, 1.19e6],
         "xtalk": [0.0, 0.5, 1.2, 1.8, 2.4, 3.1, 3.7],
         "dcr":   [0.35, 0.55, 0.75, 1.0, 1.4, 2.0, 2.5],
+        "afterpulse": [0.5, 1.0, 1.8, 3.0, 4.5, 6.0, 7.5],
     },
     50: {
         "vov":   [2, 3, 4, 5, 6, 7, 8],
@@ -312,6 +313,7 @@ OV_CURVES = {
         "gain":  [1.15e6, 1.77e6, 2.30e6, 2.89e6, 3.50e6, 4.03e6, 4.54e6],
         "xtalk": [1.7, 3.9, 5.7, 7.6, 9.2, 10.7, 11.9],
         "dcr":   [0.6, 1.0, 1.6, 2.5, 4.0, 5.5, 7.0],
+        "afterpulse": [1.0, 2.0, 3.5, 5.0, 7.0, 9.0, 11.0],
     },
     75: {
         "vov":   [2, 3, 4, 5, 6, 7, 8],
@@ -319,6 +321,7 @@ OV_CURVES = {
         "gain":  [2.52e6, 4.00e6, 5.57e6, 6.94e6, 8.29e6, 9.49e6, 1.06e7],
         "xtalk": [3.2, 6.8, 10.3, 13.3, 16.1, 18.8, 21.1],
         "dcr":   [0.6, 1.0, 1.6, 2.5, 4.0, 5.5, 7.0],
+        "afterpulse": [1.5, 3.0, 5.0, 7.0, 9.5, 12.0, 14.5],
     },
 }
 
@@ -381,6 +384,8 @@ def apply_overvoltage(model_data: dict, vov: float) -> dict:
         _interp(model_data["vov_v"], c["vov"], c["xtalk"]), 1)
     factor_dcr = _interp(vov, c["vov"], c["dcr"]) / max(
         _interp(model_data["vov_v"], c["vov"], c["dcr"]), 1)
+    factor_ap = _interp(vov, c["vov"], c["afterpulse"]) / max(
+        _interp(model_data["vov_v"], c["vov"], c["afterpulse"]), 1)
 
     return {
         "pde": model_data["pde"] * factor_pde,
@@ -388,6 +393,7 @@ def apply_overvoltage(model_data: dict, vov: float) -> dict:
         "crosstalk": (model_data["crosstalk"] * 100 * factor_xtalk) / 100.0,
         "dcr_typ_kcps": model_data["dcr_typ_kcps"] * factor_dcr,
         "dcr_max_kcps": model_data["dcr_max_kcps"] * factor_dcr,
+        "afterpulse": (model_data["afterpulse"] * 100 * factor_ap) / 100.0,
     }
 
 
@@ -403,16 +409,27 @@ def apply_wavelength(model_data: dict, wavelength_nm: float) -> float:
     return max(factor, 0.0)
 
 
+DCR_TEMP_REF = 25.0
+DCR_DOUBLING_C = 7.7
+
+
 def apply_temperature(model_data: dict, temperature_c: float,
                       vov_nominal: float) -> dict:
-    temp_ref = 25.0
+    temp_ref = DCR_TEMP_REF
     dtemp = temperature_c - temp_ref
     delta_vbr = model_data["temp_coeff_mv"] * dtemp / 1000.0
     vov_effective = vov_nominal - delta_vbr
+
+    dcr_factor = 2.0 ** (dtemp / DCR_DOUBLING_C)
+    dcr_typ_effective = model_data["dcr_typ_kcps"] * dcr_factor
+    dcr_max_effective = model_data["dcr_max_kcps"] * dcr_factor
 
     return {
         "temperature_c": temperature_c,
         "delta_vbr": delta_vbr,
         "vov_effective": max(vov_effective, 0.1),
         "vov_nominal": vov_nominal,
+        "dcr_typ_kcps_effective": dcr_typ_effective,
+        "dcr_max_kcps_effective": dcr_max_effective,
+        "dcr_factor": dcr_factor,
     }
