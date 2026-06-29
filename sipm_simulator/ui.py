@@ -22,7 +22,7 @@ from datasheets import list_models, get_model, DATASHEETS_DIR, \
     apply_overvoltage, apply_wavelength, apply_temperature
 from optical_chain import OpticalConfig, calculate_photons, LED_DATABASE
 from light_dialog import LightSourceDialog
-from data_io import load_csv_waveform, compare_waveforms
+from data_io import load_csv_waveform, compare_waveforms, export_full_results
 
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
@@ -145,9 +145,9 @@ class App(ctk.CTk):
         self._wf_b_dark = None
         self._wf_a_ap = None
         self._wf_b_ap = None
-        self._show_dcr = tk.BooleanVar(value=True)
-        self._show_ap = tk.BooleanVar(value=True)
-        self._show_xtalk = tk.BooleanVar(value=True)
+        self._show_dcr = tk.BooleanVar(value=False)
+        self._show_ap = tk.BooleanVar(value=False)
+        self._show_xtalk = tk.BooleanVar(value=False)
         self._optical_config = OpticalConfig()
         self._optical_result = None
 
@@ -450,6 +450,13 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"))
         self.ratios_label.grid(row=1, column=0, pady=(0, 4))
 
+        self.export_btn = ctk.CTkButton(
+            self.tab_stats, text="Export Results...",
+            height=32, font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#1565c0", hover_color="#1976d2",
+            command=self._export_full_results)
+        self.export_btn.grid(row=2, column=0, pady=(4, 8), padx=4)
+
     def _build_statusbar(self):
         self.status_var = tk.StringVar(value="Select models and Compare")
         status = ctk.CTkLabel(self, textvariable=self.status_var,
@@ -471,6 +478,8 @@ class App(ctk.CTk):
                               command=self._load_experimental)
         file_menu.add_command(label="Export Waveform CSV...",
                               command=self._export_csv)
+        file_menu.add_command(label="Export Results CSV...",
+                              command=self._export_full_results)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.destroy)
         menubar.add_cascade(label="File", menu=file_menu)
@@ -675,83 +684,39 @@ class App(ctk.CTk):
                               tau_fall=db["pulse_fall_ns"] * 1e-9,
                               gain=ov_b["gain"])
 
-        rng = np.random.default_rng(seed)
-        self._wf_a_primary = pg_a.generate_temporal(
-            n_pulses=self._result_a.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=0, n_crosstalk=0, n_dark=0,
-            recovery_time_ns=recovery_a, rng=rng)
-        rng2 = np.random.default_rng(seed)
-        self._wf_a_primary_xt = pg_a.generate_temporal(
-            n_pulses=self._result_a.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=0,
-            n_crosstalk=self._result_a.crosstalk_fires, n_dark=0,
-            recovery_time_ns=recovery_a, rng=rng2)
-        rng3 = np.random.default_rng(seed)
-        self._wf_a_ap = pg_a.generate_temporal(
-            n_pulses=self._result_a.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=self._result_a.afterpulse_fires,
-            n_crosstalk=self._result_a.crosstalk_fires, n_dark=0,
-            recovery_time_ns=recovery_a, rng=rng3)
-        rng_d_a = np.random.default_rng(seed + 1000)
-        self._wf_a_dark = pg_a.generate_temporal(
-            n_pulses=0, pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=0, n_crosstalk=0,
-            n_dark=self._result_a.dark_counts,
-            recovery_time_ns=recovery_a, rng=rng_d_a)
-        self._wf_a = pg_a.generate_temporal(
-            n_pulses=self._result_a.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=self._result_a.afterpulse_fires,
-            n_crosstalk=self._result_a.crosstalk_fires,
-            n_dark=self._result_a.dark_counts,
-            recovery_time_ns=recovery_a, rng=rng)
+        def _build_waveforms(pg, result, recovery_ns):
+            tail_ns = max(recovery_ns, 5.0 * pg.tau_fall * 1e9) + 40
+            pri = result.event_times("photon_detected")
+            xt = result.event_times("crosstalk")
+            ap = result.event_times("afterpulse", fired_only=True)
+            dk = result.event_times("dark", fired_only=True)
+            max_t = 0.0
+            for arr in [pri, xt, ap, dk]:
+                if len(arr) > 0:
+                    max_t = max(max_t, float(np.max(arr)))
+            common_dur = max_t + tail_ns
+            wf_pri = pg.generate_from_times(
+                primary_times_ns=pri, duration_ns=common_dur)
+            wf_pri_xt = pg.generate_from_times(
+                primary_times_ns=pri, crosstalk_times_ns=xt,
+                duration_ns=common_dur)
+            wf_ap = pg.generate_from_times(
+                primary_times_ns=pri, crosstalk_times_ns=xt,
+                afterpulse_times_ns=ap, duration_ns=common_dur)
+            wf_dark = pg.generate_from_times(
+                dark_times_ns=dk, duration_ns=common_dur)
+            wf_full = pg.generate_from_times(
+                primary_times_ns=pri, crosstalk_times_ns=xt,
+                afterpulse_times_ns=ap, dark_times_ns=dk,
+                duration_ns=common_dur)
+            return wf_pri, wf_pri_xt, wf_ap, wf_dark, wf_full
 
-        rng_b = np.random.default_rng(seed + 1)
-        self._wf_b_primary = pg_b.generate_temporal(
-            n_pulses=self._result_b.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=0, n_crosstalk=0, n_dark=0,
-            recovery_time_ns=recovery_b, rng=rng_b)
-        rng_b2 = np.random.default_rng(seed + 1)
-        self._wf_b_primary_xt = pg_b.generate_temporal(
-            n_pulses=self._result_b.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=0,
-            n_crosstalk=self._result_b.crosstalk_fires, n_dark=0,
-            recovery_time_ns=recovery_b, rng=rng_b2)
-        rng_b3 = np.random.default_rng(seed + 1)
-        self._wf_b_ap = pg_b.generate_temporal(
-            n_pulses=self._result_b.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=self._result_b.afterpulse_fires,
-            n_crosstalk=self._result_b.crosstalk_fires, n_dark=0,
-            recovery_time_ns=recovery_b, rng=rng_b3)
-        rng_d_b = np.random.default_rng(seed + 1001)
-        self._wf_b_dark = pg_b.generate_temporal(
-            n_pulses=0, pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=0, n_crosstalk=0,
-            n_dark=self._result_b.dark_counts,
-            recovery_time_ns=recovery_b, rng=rng_d_b)
-        self._wf_b = pg_b.generate_temporal(
-            n_pulses=self._result_b.total_firings,
-            pulse_start_ns=0,
-            pulse_width_ns=opt_result["pulse_width_ns"],
-            n_afterpulses=self._result_b.afterpulse_fires,
-            n_crosstalk=self._result_b.crosstalk_fires,
-            n_dark=self._result_b.dark_counts,
-            recovery_time_ns=recovery_b, rng=rng_b)
+        (self._wf_a_primary, self._wf_a_primary_xt, self._wf_a_ap,
+         self._wf_a_dark, self._wf_a) = _build_waveforms(
+            pg_a, self._result_a, recovery_a)
+        (self._wf_b_primary, self._wf_b_primary_xt, self._wf_b_ap,
+         self._wf_b_dark, self._wf_b) = _build_waveforms(
+            pg_b, self._result_b, recovery_b)
 
         self._pg_a = pg_a
         self._pg_b = pg_b
@@ -1159,6 +1124,48 @@ class App(ctk.CTk):
                    delimiter=",", header="time_ns,amplitude", comments="")
         self._status(f"Exported to {path}")
 
+    def _export_full_results(self):
+        from tkinter import filedialog
+        if self._result_a is None and self._result_b is None:
+            self._status("Run comparison first.")
+            return
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"),
+                       ("All Files", "*.*")])
+        if not path:
+            return
+        try:
+            wl = (self._optical_result.get("wavelength_nm", 450)
+                  if self._optical_result else 450)
+            export_full_results(
+                out_path=path,
+                result_a=self._result_a,
+                result_b=self._result_b,
+                wf_a=self._wf_a,
+                wf_b=self._wf_b,
+                wf_a_primary=self._wf_a_primary,
+                wf_b_primary=self._wf_b_primary,
+                wf_a_primary_xt=self._wf_a_primary_xt,
+                wf_b_primary_xt=self._wf_b_primary_xt,
+                wf_a_ap=self._wf_a_ap,
+                wf_b_ap=self._wf_b_ap,
+                wf_a_dark=self._wf_a_dark,
+                wf_b_dark=self._wf_b_dark,
+                sipm_a=self._sipm_a,
+                sipm_b=self._sipm_b,
+                optical_result=self._optical_result,
+                temp_a=getattr(self, '_temp_a', None),
+                temp_b=getattr(self, '_temp_b', None),
+                optical_config=self._optical_config,
+                model_a_id=self._current_model_a,
+                model_b_id=self._current_model_b,
+                wavelength_nm=wl,
+            )
+            self._status(f"Exported to {path}")
+        except Exception as e:
+            self._status(f"Export error: {e}")
+
     def _show_about(self):
         from tkinter import messagebox
         messagebox.showinfo(
@@ -1445,7 +1452,10 @@ class CurveEditorDialog(ctk.CTkToplevel):
 
 def main():
     app = App()
-    app.mainloop()
+    try:
+        app.mainloop()
+    except KeyboardInterrupt:
+        app.destroy()
 
 
 if __name__ == "__main__":

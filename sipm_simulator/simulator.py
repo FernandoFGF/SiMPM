@@ -16,6 +16,7 @@ class SimulationResult:
         self.afterpulse_fires: int = 0
         self.fired_cell_coords: list[tuple[int, int]] = []
         self.total_firings: int = 0
+        self.events: list[dict] = []
 
     @property
     def occupancy(self) -> float:
@@ -60,12 +61,25 @@ class SimulationResult:
             f")"
         )
 
+    def event_times(self, event_type: str,
+                    fired_only: bool = True) -> "np.ndarray":
+        import numpy as np
+        times = []
+        for ev in self.events:
+            if ev.get("type") != event_type:
+                continue
+            if fired_only and "fired" in ev and not ev["fired"]:
+                continue
+            times.append(ev["time_ns"])
+        return np.array(times, dtype=np.float64)
+
 
 class SiPMSimulator:
     def __init__(self, sipm: SiPMGeometry, pde: float = 0.40,
                  gain: float = 1.0e6, dcr: float = 0.0,
                  crosstalk_prob: float = 0.0,
                  afterpulse_prob: float = 0.0,
+                 afterpulse_delay: float = 50e-9,
                  dcr_time_window_ns: float = 20.0):
         self.sipm = sipm
         self.pde = pde
@@ -73,6 +87,7 @@ class SiPMSimulator:
         self.dcr = dcr
         self.crosstalk_prob = crosstalk_prob
         self.afterpulse_prob = afterpulse_prob
+        self.afterpulse_delay = afterpulse_delay
         self.dcr_time_window_s = dcr_time_window_ns * 1e-9
         self._rng = np.random.default_rng()
 
@@ -159,7 +174,7 @@ class SiPMSimulator:
         self.sipm.reset()
 
         if self.dcr > 0:
-            self._inject_dark_counts(result)
+            self._inject_dark_counts(result, pulse_width_ns)
 
         photons = source.generate(n_photons, sipm=self.sipm, rng=self.rng)
         xs = np.array([p.x for p in photons])
@@ -195,10 +210,16 @@ class SiPMSimulator:
                                         dtype=np.float64)
         cell_fire_count = np.zeros((self.sipm.ny, self.sipm.nx), dtype=np.int32)
         primary_firings = 0
+        cell_fire_times: dict[tuple[int, int], float] = {}
 
         for i in np.where(in_active_only)[0]:
             r, c = rows[i], cols[i]
             self.sipm._photons_received[r, c] += 1
+            result.events.append({
+                "type": "photon_arrival",
+                "row": int(r), "col": int(c),
+                "time_ns": float(arrival_times[i]),
+            })
 
         det_order = np.where(detected_mask)[0]
         for i in det_order:
@@ -208,6 +229,11 @@ class SiPMSimulator:
             if self.sipm._fired[r, c]:
                 if t_arrival < cell_recovery_until[r, c]:
                     result.photons_blocked += 1
+                    result.events.append({
+                        "type": "photon_blocked",
+                        "row": int(r), "col": int(c),
+                        "time_ns": float(t_arrival),
+                    })
                     continue
 
             self.sipm._fired[r, c] = True
@@ -216,6 +242,12 @@ class SiPMSimulator:
             result.photons_detected += 1
             primary_firings += 1
             result.fired_cell_coords.append((r, c))
+            cell_fire_times[(int(r), int(c))] = float(t_arrival)
+            result.events.append({
+                "type": "photon_detected",
+                "row": int(r), "col": int(c),
+                "time_ns": float(t_arrival),
+            })
 
         result.total_firings = primary_firings
 
@@ -225,14 +257,15 @@ class SiPMSimulator:
         result.fired_cells = self.sipm.fired_cells
 
         if self.crosstalk_prob > 0:
-            self._apply_crosstalk(result)
+            self._apply_crosstalk(result, cell_fire_times)
         if self.afterpulse_prob > 0:
-            self._generate_afterpulses(result)
+            self._generate_afterpulses(result, cell_fire_times, recovery_time_ns)
 
         result.fired_cells = self.sipm.fired_cells
         return result
 
-    def _inject_dark_counts(self, result: SimulationResult):
+    def _inject_dark_counts(self, result: SimulationResult,
+                             pulse_width_ns: float = 50.0):
         area_mm2 = (self.sipm.width * self.sipm.height) / 1e6
         expected = self.dcr * area_mm2 * self.dcr_time_window_s
         n_dark = self._rng.poisson(expected)
@@ -242,17 +275,28 @@ class SiPMSimulator:
             col = self._rng.integers(0, self.sipm.nx)
             row = self._rng.integers(0, self.sipm.ny)
             cell = self.sipm.cells[row][col]
-            if not cell.fired:
+            t_ns = float(self._rng.uniform(0, pulse_width_ns))
+            fired = not cell.fired
+            if fired:
                 cell.fired = True
                 cell.dark_fired = True
                 result.fired_cell_coords.append((row, col))
                 result.photons_detected += 1
+            result.events.append({
+                "type": "dark",
+                "row": int(row), "col": int(col),
+                "time_ns": t_ns,
+                "fired": fired,
+            })
 
-    def _apply_crosstalk(self, result: SimulationResult):
+    def _apply_crosstalk(self, result: SimulationResult,
+                          cell_fire_times: dict = None):
         fired_snapshot = list(result.fired_cell_coords)
         neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
         for row, col in fired_snapshot:
+            trigger_time = (cell_fire_times.get((row, col), 0.0)
+                            if cell_fire_times else 0.0)
             for dr, dc in neighbors:
                 nr, nc = row + dr, col + dc
                 neighbor = self.sipm.get_cell(nr, nc)
@@ -264,24 +308,40 @@ class SiPMSimulator:
                     result.fired_cell_coords.append((nr, nc))
                     result.photons_detected += 1
                     result.crosstalk_fires += 1
+                    t_ns = float(trigger_time)
+                    result.events.append({
+                        "type": "crosstalk",
+                        "row": int(nr), "col": int(nc),
+                        "time_ns": t_ns,
+                        "trigger_cell": f"({row},{col})",
+                    })
 
-    def _generate_afterpulses(self, result: SimulationResult):
+    def _generate_afterpulses(self, result: SimulationResult,
+                               cell_fire_times: dict = None,
+                               recovery_time_ns: float = 20.0):
         fired_snapshot = list(result.fired_cell_coords)
         for row, col in fired_snapshot:
             if self._rng.random() < self.afterpulse_prob:
-                candidates = [(row, col)]
-                for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                    nr, nc = row + dr, col + dc
-                    if self.sipm.get_cell(nr, nc) is not None:
-                        candidates.append((nr, nc))
-                ar, ac = candidates[self._rng.integers(0, len(candidates))]
-                cell = self.sipm.cells[ar][ac]
-                if not cell.fired:
-                    cell.fired = True
-                    cell.afterpulse_fired = True
-                    result.fired_cell_coords.append((ar, ac))
+                trigger_time = (cell_fire_times.get((row, col), 0.0)
+                                if cell_fire_times else 0.0)
+                delay_ns = float(self._rng.exponential(
+                    self.afterpulse_delay * 1e9))
+                t_ns = float(trigger_time) + delay_ns
+                fired = delay_ns >= recovery_time_ns
+                if fired:
+                    self.sipm.cells[row][col].afterpulse_fired = True
+                    if not self.sipm.cells[row][col].fired:
+                        self.sipm.cells[row][col].fired = True
+                    result.fired_cell_coords.append((row, col))
                     result.photons_detected += 1
                     result.afterpulse_fires += 1
+                result.events.append({
+                    "type": "afterpulse",
+                    "row": int(row), "col": int(col),
+                    "time_ns": t_ns,
+                    "delay_ns": delay_ns,
+                    "fired": fired,
+                })
 
 
 class ArraySimulationResult:

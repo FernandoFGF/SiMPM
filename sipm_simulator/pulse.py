@@ -123,3 +123,43 @@ class PulseGenerator:
             amplitude += self._times_to_waveform(dark_times, t_s)
 
         return Waveform(t_ns, amplitude)
+
+    def generate_from_times(
+        self,
+        primary_times_ns: "np.ndarray | None" = None,
+        crosstalk_times_ns: "np.ndarray | None" = None,
+        afterpulse_times_ns: "np.ndarray | None" = None,
+        dark_times_ns: "np.ndarray | None" = None,
+        tail_ns: float = 100.0,
+        n_points: int = 500,
+        duration_ns: float | None = None,
+    ) -> Waveform:
+        if duration_ns is None:
+            max_time = 0.0
+            for arr in [primary_times_ns, crosstalk_times_ns,
+                         afterpulse_times_ns, dark_times_ns]:
+                if arr is not None and len(arr) > 0:
+                    max_time = max(max_time, float(np.max(arr)))
+            duration_ns = max(max_time + tail_ns, tail_ns)
+        t_ns = np.linspace(0, duration_ns, n_points)
+        t_s = t_ns * 1e-9
+
+        amplitude = np.zeros_like(t_s)
+
+        if primary_times_ns is not None and len(primary_times_ns) > 0:
+            amplitude += self._times_to_waveform(
+                primary_times_ns * 1e-9, t_s)
+
+        if crosstalk_times_ns is not None and len(crosstalk_times_ns) > 0:
+            amplitude += self._times_to_waveform(
+                crosstalk_times_ns * 1e-9, t_s)
+
+        if afterpulse_times_ns is not None and len(afterpulse_times_ns) > 0:
+            amplitude += self._times_to_waveform(
+                afterpulse_times_ns * 1e-9, t_s, self.afterpulse_fraction)
+
+        if dark_times_ns is not None and len(dark_times_ns) > 0:
+            amplitude += self._times_to_waveform(
+                dark_times_ns * 1e-9, t_s)
+
+        return Waveform(t_ns, amplitude)

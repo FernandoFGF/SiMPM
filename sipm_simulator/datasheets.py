@@ -82,13 +82,13 @@ def _build_catalog():
     #          crosstalk, VBR, temp coeff)
     # Page 4-6: PDE vs wavelength, overvoltage curves
 
-    # 25µm pitch, FF=47%, Vov=5V, pulse_fall~5ns, recovery~15ns
+    # 25µm pitch, FF=47%, Vov=5V, tau~15ns, recovery~15ns
     _register("S13360-1325", 1.3, 2668, 25.0, 0.47,
               pde=0.35, gain=7.0e5, breakdown_v=53.0,
               dcr_typ_kcps=70, dcr_max_kcps=210, capacitance_pf=60,
               crosstalk_pct=1.0, vop="VBR+5V", vov_v=5.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=5.0, recovery_ns=15.0,
+              pulse_fall_ns=15.0, recovery_ns=15.0,
               packages=["CS", "PE"])
 
     _register("S13360-3025", 3.0, 14400, 25.0, 0.47,
@@ -96,7 +96,7 @@ def _build_catalog():
               dcr_typ_kcps=400, dcr_max_kcps=1200, capacitance_pf=320,
               crosstalk_pct=1.0, vop="VBR+5V", vov_v=5.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=5.0, recovery_ns=15.0,
+              pulse_fall_ns=15.0, recovery_ns=15.0,
               packages=["CS", "PE"])
 
     _register("S13360-6025", 6.0, 57600, 25.0, 0.47,
@@ -104,16 +104,16 @@ def _build_catalog():
               dcr_typ_kcps=1600, dcr_max_kcps=5000, capacitance_pf=1280,
               crosstalk_pct=1.0, vop="VBR+5V", vov_v=5.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=5.0, recovery_ns=15.0,
+              pulse_fall_ns=15.0, recovery_ns=15.0,
               packages=["CS", "PE"])
 
-    # 50µm pitch, FF=74%, Vov=3V, pulse_fall~10ns, recovery~20ns
+    # 50µm pitch, FF=74%, Vov=3V, tau~20ns, recovery~20ns
     _register("S13360-1350", 1.3, 667, 50.0, 0.74,
               pde=0.40, gain=1.7e6, breakdown_v=53.0,
               dcr_typ_kcps=90, dcr_max_kcps=270, capacitance_pf=60,
               crosstalk_pct=5.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=10.0, recovery_ns=20.0,
+              pulse_fall_ns=20.0, recovery_ns=20.0,
               packages=["CS", "PE"])
 
     _register("S13360-3050", 3.0, 3600, 50.0, 0.74,
@@ -121,7 +121,7 @@ def _build_catalog():
               dcr_typ_kcps=500, dcr_max_kcps=1500, capacitance_pf=320,
               crosstalk_pct=5.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=10.0, recovery_ns=20.0,
+              pulse_fall_ns=20.0, recovery_ns=20.0,
               packages=["CS", "PE"])
 
     _register("S13360-6050", 6.0, 14400, 50.0, 0.74,
@@ -129,16 +129,16 @@ def _build_catalog():
               dcr_typ_kcps=2000, dcr_max_kcps=6000, capacitance_pf=1280,
               crosstalk_pct=5.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=10.0, recovery_ns=20.0,
+              pulse_fall_ns=20.0, recovery_ns=20.0,
               packages=["CS", "PE"])
 
-    # 75µm pitch, FF=82%, Vov=3V, pulse_fall~15ns, recovery~30ns
+    # 75µm pitch, FF=82%, Vov=3V, tau_fall~30ns, recovery~30ns
     _register("S13360-1375", 1.3, 285, 75.0, 0.82,
               pde=0.50, gain=4.0e6, breakdown_v=53.0,
               dcr_typ_kcps=90, dcr_max_kcps=270, capacitance_pf=60,
               crosstalk_pct=7.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=15.0, recovery_ns=30.0,
+              pulse_fall_ns=30.0, recovery_ns=30.0,
               packages=["CS", "PE"])
 
     _register("S13360-3075", 3.0, 1600, 75.0, 0.82,
@@ -146,7 +146,7 @@ def _build_catalog():
               dcr_typ_kcps=500, dcr_max_kcps=1500, capacitance_pf=320,
               crosstalk_pct=7.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=15.0, recovery_ns=30.0,
+              pulse_fall_ns=30.0, recovery_ns=30.0,
               packages=["CS", "PE"])
 
     _register("S13360-6075", 6.0, 6400, 75.0, 0.82,
@@ -154,7 +154,7 @@ def _build_catalog():
               dcr_typ_kcps=2000, dcr_max_kcps=6000, capacitance_pf=1280,
               crosstalk_pct=7.0, vop="VBR+3V", vov_v=3.0, temp_coeff_mv=54,
               spectral_min_nm=200, spectral_max_nm=950,
-              pulse_fall_ns=15.0, recovery_ns=30.0,
+              pulse_fall_ns=30.0, recovery_ns=30.0,
               packages=["CS", "PE"])
 
     _save_cache()

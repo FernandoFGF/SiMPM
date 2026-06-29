@@ -121,6 +121,23 @@ class SiPMGeometry:
     def fired_mask(self) -> np.ndarray:
         return self._fired.copy()
 
+    def dark_fired_mask(self) -> np.ndarray:
+        return self._dark_fired.copy()
+
+    def crosstalk_fired_mask(self) -> np.ndarray:
+        return self._crosstalk_fired.copy()
+
+    def afterpulse_fired_mask(self) -> np.ndarray:
+        return self._afterpulse_fired.copy()
+
+    def primary_fired_mask(self) -> np.ndarray:
+        return (
+            self._fired
+            & ~self._dark_fired
+            & ~self._crosstalk_fired
+            & ~self._afterpulse_fired
+        ).copy()
+
     def hit_count_map(self) -> np.ndarray:
         return self._photons_received.copy()
 
